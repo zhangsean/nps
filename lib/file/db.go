@@ -3,6 +3,7 @@ package file
 import (
 	"errors"
 	"fmt"
+	"github.com/astaxie/beego/logs"
 	"net/http"
 	"regexp"
 	"sort"
@@ -124,7 +125,9 @@ func (s *DbUtils) DelTask(id int) error {
 
 //md5 password
 func (s *DbUtils) GetTaskByMd5Password(p string) (t *Tunnel) {
+	logs.Info("GetTaskByMd5Password init")
 	s.JsonDb.Tasks.Range(func(key, value interface{}) bool {
+		logs.Info("p2p pwd error", crypt.Md5(value.(*Tunnel).Password))
 		if crypt.Md5(value.(*Tunnel).Password) == p {
 			t = value.(*Tunnel)
 			return false

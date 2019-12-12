@@ -23,7 +23,11 @@ func GetInstallPath() string {
 	if IsWindows() {
 		path = `C:\Program Files\nps`
 	} else {
-		path = "/etc/nps"
+		workPath, err := os.Getwd()
+		if err != nil {
+			panic(err)
+		}
+		path = workPath
 	}
 	return path
 }

@@ -200,6 +200,7 @@ func (s *Bridge) cliProcess(c *conn.Conn) {
 		s.verifySuccess(c)
 	}
 	if flag, err := c.ReadFlag(); err == nil {
+		logs.Info("typeDeal id", flag)
 		s.typeDeal(flag, c, id, string(vs))
 	} else {
 		logs.Warn(err, flag)
@@ -260,6 +261,7 @@ func (s *Bridge) typeDeal(typeVal string, c *conn.Conn, id int, vs string) {
 		if b, err := c.GetShortContent(32); err == nil {
 			s.SecretChan <- conn.NewSecret(string(b), c)
 		} else {
+			logs.Info("psp secret error", string(b))
 			logs.Error("secret error, failed to match the key successfully")
 		}
 	case common.WORK_FILE:
@@ -272,6 +274,7 @@ func (s *Bridge) typeDeal(typeVal string, c *conn.Conn, id int, vs string) {
 		if b, err := c.GetShortContent(32); err != nil {
 			logs.Error("p2p error,", err.Error())
 		} else if t := file.GetDb().GetTaskByMd5Password(string(b)); t == nil {
+			logs.Info("p2p pwd error", string(b))
 			logs.Error("p2p error, failed to match the key successfully")
 		} else {
 			if v, ok := s.Client.Load(t.Client.Id); !ok {

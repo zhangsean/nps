@@ -118,7 +118,7 @@ func CopyDir(srcPath string, destPath string) error {
 		return err
 	} else {
 		if !destInfo.IsDir() {
-			e := errors.New("DestInfo is not the right directory!")
+			e := errors.New("DestInfo is not the right directory!`")
 			return e
 		}
 	}

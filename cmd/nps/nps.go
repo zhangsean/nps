@@ -30,6 +30,7 @@ var (
 func main() {
 	flag.Parse()
 	beego.LoadAppConfig("ini", filepath.Join(common.GetRunPath(), "conf", "nps.conf"))
+	logs.Info("Getting bridge_port error", common.GetRunPath())
 	routers.Init()
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
