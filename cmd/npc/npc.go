@@ -95,7 +95,7 @@ func main() {
 		}
 	} else {
 		if *configPath == "" {
-			*configPath = "npc.conf"
+			*configPath = common.GetRunPath() + "/conf/npc.conf"
 		}
 		client.StartFromFile(*configPath)
 	}
