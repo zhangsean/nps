@@ -2,19 +2,29 @@
 
 ## 总体架构
 
-- client (server, flow, mode)
-- server (mode as Service, bridge as NetBridge, task as Tunnel)
-- service (connection, bridge, tunnel, flow, data)
+- 客户端 client (server, flow, mode)
+- 服务端 server (mode as Service, bridge as NetBridge, task as Tunnel)
+- 服务 service (connection, bridge, tunnel, flow, data)
 
 ## 程序入口
 
 ### cmd命令板块
 
+在终端窗口执行命令，可以进入我们的程序
+
 ### 服务端命令行入口
 
-`/nps/cmd/nps/nps.go` 包含服务端`main`入口
+在服务器上，执行nps命令，将调用以下文件的功能
 
-```
+[`nps.go`](/cmd/nps/nps.go) 包含服务端
+
+执行顺序如下
+
+- 定义一个文件对象，加载一个网络服务器的隧道，命名为task
+- 使用beego的应用配置获取桥接端口
+- 使用服务器的StartNewServer方法，将端口，任务和服务器配置等作为参数，执行启动
+
+```go
 package main
 import	"ehang.io/nps/server"
 
@@ -33,14 +43,20 @@ func run() {
 ```
 
 ### 客户端命令入口
-`/nps/cmd/npc/npc.go`包含客户端的`main`入口
+[`/cmd/npc/npc.go`](/cmd/npc/npc.go)包含客户端的`main`入口
 
 
 ## Server服务器板块
 
-`/nps/server/server.go`服务器定义
+[`/server/server.go`][/server/server.go]服务器定义
 
-```lang=go
+服务器的启动顺序如下
+- 调用网桥端口
+- 配置文件隧道
+- 确定网桥类型
+- 必要时断开网桥
+
+```go
 
 package server // 定义为server包
 
@@ -86,8 +102,11 @@ Bridge.StartTunnel()
     
 ```
 
-`/nps/server/server.go`服务器模式的切换
-```lang=go
+#### 对应不同的网络协议，启动不同的服务器模式，包括`tcp`, `udp`, `sock5`等等
+
+[`/server/server.go`][/server/server.go]服务器模式的切换
+
+```go
 //new a server by mode name
 func NewMode(Bridge *bridge.Bridge, c *file.Tunnel) proxy.Service {
 	var service proxy.Service
@@ -125,27 +144,31 @@ func NewMode(Bridge *bridge.Bridge, c *file.Tunnel) proxy.Service {
 
 ## Proxy代理板块
 
+这里是代理功能的真正实现，主要是利用了`net.Listener`监听端口。
+
+对收到的客户端数据进行分析，确定对象隧道，并进行数据的来回拷贝。
+
 ### 基础服务器
 
-`/server/proxy/base.go`中定义了服务借口，基础服务器接口
+[`/server/proxy/base.go`](/server/proxy/base.go)中定义了服务借口，基础服务器接口
 
 BaseServer的最主要方法
-- DealClient
-- FlowAddHost
-- FlowAdd
+- DealClient 处理客户端请求
+- FlowAddHost 数据流添加主机
+- FlowAdd  数据流扩容
 
-```lang=go
-// base
+```go
+// base 任何一个服务借口必须可以启动和关闭
 type Service interface {
 	Start() error
 	Close() error
 }
-
+// 任何网桥可以发送连接信息，包括客户id，连接，隧道等等，并返回一个连接
 type NetBridge interface {
 	SendLinkInfo(clientId int, link *conn.Link, t *file.Tunnel) (target net.Conn, err error)
 }
 
-//BaseServer struct
+//BaseServer struct 基础服务器必须包括网桥和隧道，并且容错，同步加锁
 type BaseServer struct {
 	id           int
 	bridge       NetBridge // 网桥创建通道
@@ -176,9 +199,11 @@ func (s *BaseServer) DealClient(c *conn.Conn, client *file.Client, addr string, 
 ```
 
 ### tcp服务器
-`/nps/server/proxy/tcp.go`定义了tcp服务器的内容
+[`/nps/server/proxy/tcp.go`](/nps/server/proxy/tcp.go)定义了tcp服务器的内容
 
-```lang=go
+隧道模式服务器，可以处理和监听进程及通道
+
+```go
 type TunnelModeServer struct {
 	BaseServer
 	process  process // 处理进程, 主要是对通道进行操作
@@ -194,6 +219,7 @@ func NewTunnelModeServer(process process, bridge NetBridge, task *file.Tunnel) *
 	return s
 }
 
+// 启动新的Tcp监听器并粗粒素具
 func (s *TunnelModeServer) Start() error {
 	return conn.NewTcpListenerAndProcess(s.task.ServerIp+":"+strconv.Itoa(s.task.Port), func(c net.Conn) {
 		if err := s.CheckFlowAndConnNum(s.task.Client); err != nil {
@@ -229,9 +255,9 @@ func ProcessHttp(c *conn.Conn, s *TunnelModeServer) error
 
 ### 理解一些基础的定义
 
-`/lib/file/obj.go`中定义了通道、客户端、数据流等
+[`/lib/file/obj.go`](/lib/file/obj.go)中定义了通道、客户端、数据流等
 
-```lang=go
+```go
 type Flow struct {
 	ExportFlow int64
 	InletFlow  int64
@@ -288,3 +314,4 @@ type Tunnel struct {
 ## Gui用户界面板块
 
 ## Web网络界面板块
+
