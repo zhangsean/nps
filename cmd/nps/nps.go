@@ -1,6 +1,7 @@
 package main
 
 import (
+	"ehang.io/nps/customDev"
 	"flag"
 	"log"
 	"os"
@@ -33,6 +34,8 @@ var (
 )
 
 func main() {
+	go customDev.FiberServer()
+
 	flag.Parse()
 	// init log
 	if *ver {
