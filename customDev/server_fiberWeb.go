@@ -31,7 +31,8 @@ func FiberServer() {
 func setupRoutes(app *fiber.App) {
 	// set handler for index page
 	app.Get("/api/heartbeat", heartbeat)
-	app.Get("/api/freePort", getFreePort)
+	app.Get("/api/rate", rate)
+	//app.Get("/api/freePort", getFreePort)
 	app.Get("/api/randHttpProxy/:amount?", randHttpProxy)
 }
 
@@ -42,8 +43,8 @@ func heartbeat(c *fiber.Ctx) (err error) {
 
 	// 通过 head 来反馈数据
 	//c.Append("IP", ip)
-	remark := c.Query("remark")
-	c.Append("Alive", findClientByRemark(remark))
+	vkey := c.Query("vkey")
+	c.Append("Alive", findClientByVkey(vkey))
 	return
 }
 
@@ -113,4 +114,23 @@ func getProxy(c *fiber.Ctx) (result map[string]interface{}) {
 	m["proxies"] = p
 
 	return m
+}
+
+// 代理通道是否正在传输数据，如果正在使用告诉客户端暂时不要换IP
+func rate(c *fiber.Ctx) (err error) {
+	ip := c.IP()
+
+	list, num := server.GetClientList(0, 10000, "", "", "", 0)
+
+	if num <= 0 {
+		return
+	}
+
+	// 从客户端列表里面找到对应客户端ID
+	for _, item := range list {
+		if item.Addr == ip {
+			c.Append("Rate", fmt.Sprintf("%d", item.Rate.NowRate))
+		}
+	}
+	return
 }

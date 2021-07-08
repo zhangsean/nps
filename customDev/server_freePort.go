@@ -2,11 +2,9 @@ package customDev
 
 import (
 	"github.com/astaxie/beego"
-	"time"
 )
 
 var (
-	arrangedPort  = make(chan map[string]time.Time)
 	freePortsChan = make(chan int, 100000)
 )
 

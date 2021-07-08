@@ -32,7 +32,7 @@ func RunHeartbeat(serverApiHost string, serverApiPort int, latestAccessServer *t
 	for {
 		time.Sleep(2 * time.Second)
 
-		resp, _, errs := request.Head(fmt.Sprintf("http://%s:%d/api/heartbeat?remark=%s", serverApiHost, serverApiPort, CNF.CommonConfig.Client.Remark)).
+		resp, _, errs := request.Head(fmt.Sprintf("http://%s:%d/api/heartbeat?vkey=%s", serverApiHost, serverApiPort, CNF.CommonConfig.VKey)).
 			Timeout(10 * time.Second).
 			End()
 
@@ -41,7 +41,7 @@ func RunHeartbeat(serverApiHost string, serverApiPort int, latestAccessServer *t
 			continue
 		}
 
-		if resp.Header.Get("Alive") == "yes" {
+		if resp.Header.Get("Alive") == "1" {
 			*latestAccessServer = time.Now()
 		}
 

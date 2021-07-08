@@ -55,19 +55,19 @@ func isFresh(ip string) bool {
 	return false
 }
 
-// 在列表里找到对应备注的客户端
-func findClientByRemark(remark string) (exist string) {
+// 在列表里找到对应vKey的客户端
+func findClientByVkey(vKey string) (exist string) {
 	list, num := server.GetClientList(0, 10000, "", "", "", 0)
 
 	if num <= 0 {
-		return "no"
+		return "0"
 	}
 
 	// 从客户端列表里面找到对应客户端ID
 	for _, item := range list {
-		if item.Remark == remark {
-			return "yes"
+		if item.VerifyKey == vKey {
+			return "1"
 		}
 	}
-	return "no"
+	return "0"
 }
