@@ -24,13 +24,17 @@ func ClientWeb(port int) {
 	_ = app.Listen(fmt.Sprintf(":%d", port))
 }
 
-func RunHeartbeat(serverApiHost string, serverApiPort int, latestAccessServer *time.Time) {
+func RunHeartbeat(serverApiHost string, serverApiPort int, latestAccessServer *time.Time, readyRestart *bool) {
 	var (
 		request = gorequest.New()
 	)
 
 	for {
 		time.Sleep(2 * time.Second)
+
+		if *readyRestart == true {
+			continue
+		}
 
 		resp, _, errs := request.Head(fmt.Sprintf("http://%s:%d/api/heartbeat?vkey=%s", serverApiHost, serverApiPort, CNF.CommonConfig.VKey)).
 			Timeout(10 * time.Second).

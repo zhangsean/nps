@@ -20,6 +20,14 @@ func renewFreshIp(ip string) {
 	mutex.Unlock()
 }
 
+// 设置客户端为过期状态
+func setIpExpired(ip string) {
+	mutex.Lock()
+	m, _ := time.ParseDuration("-24h")
+	freshIps[ip] = time.Now().Add(m)
+	mutex.Unlock()
+}
+
 // 删除长时间没有访问 api 的客户端
 func cleanExpired() {
 	for {

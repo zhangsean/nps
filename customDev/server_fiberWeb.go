@@ -77,6 +77,7 @@ func getProxy(c *fiber.Ctx) (result map[string]interface{}) {
 		if !item.Client.IsConnect {
 			continue
 		}
+
 		// 不活跃
 		if !isFresh(item.Client.Addr) {
 			continue
@@ -119,6 +120,8 @@ func getProxy(c *fiber.Ctx) (result map[string]interface{}) {
 // 代理通道是否正在传输数据，如果正在使用告诉客户端暂时不要换IP
 func rate(c *fiber.Ctx) (err error) {
 	ip := c.IP()
+
+	setIpExpired(ip) // 此代理准备换IP，不再给api接口调用
 
 	list, num := server.GetClientList(0, 10000, "", "", "", 0)
 
