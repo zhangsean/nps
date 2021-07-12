@@ -101,3 +101,11 @@ func IsRunning(pid int) (running bool) {
 	_, b, _ := goprocess.Find(pid)
 	return b
 }
+
+// B2i bool 转 int
+func B2i(b bool) int8 {
+	if b {
+		return 1
+	}
+	return 0
+}

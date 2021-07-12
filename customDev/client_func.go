@@ -3,28 +3,12 @@ package customDev
 import (
 	"fmt"
 	"github.com/astaxie/beego/logs"
-	"github.com/gofiber/fiber/v2"
 	"github.com/parnurzeal/gorequest"
 	"regexp"
 	"time"
 )
 
-// ClientWeb 启动客户端的web功能
-func ClientWeb(port int) {
-	if CheckPort(port) == 0 {
-		panic(fmt.Sprintf("fiber web port %d is unavailable", port))
-	}
-	app := fiber.New()
-
-	// status 返回 6 表示通道正常
-	app.Get("/api/6", func(c *fiber.Ctx) error {
-		return c.SendStatus(6)
-	})
-
-	_ = app.Listen(fmt.Sprintf(":%d", port))
-}
-
-func RunHeartbeat(serverApiHost string, serverApiPort int, latestAccessServer *time.Time, readyRestart *bool) {
+func RunHeartbeat(serverApiHost string, serverApiPort int, latestAccessServer *time.Time, needRestart *bool, noticedRestart *bool) {
 	var (
 		request = gorequest.New()
 	)
@@ -32,17 +16,21 @@ func RunHeartbeat(serverApiHost string, serverApiPort int, latestAccessServer *t
 	for {
 		time.Sleep(2 * time.Second)
 
-		if *readyRestart == true {
-			continue
-		}
-
-		resp, _, errs := request.Head(fmt.Sprintf("http://%s:%d/api/heartbeat?vkey=%s", serverApiHost, serverApiPort, CNF.CommonConfig.VKey)).
+		//if *needRestart == true {
+		//	continue
+		//}
+		resp, _, errs := request.Head(fmt.Sprintf("http://%s:%d/api/heartbeat?vkey=%s&disLive=%d", serverApiHost, serverApiPort, CNF.CommonConfig.VKey, B2i(*needRestart))).
 			Timeout(10 * time.Second).
 			End()
 
 		if err := ErrAndStatus(errs, resp); err != nil {
 			logs.Error("代理池的API无法访问: %s", err)
 			continue
+		}
+
+		if *needRestart {
+			// 访问服务器接口无错误的情况下就说明已经通知
+			*noticedRestart = true
 		}
 
 		if resp.Header.Get("Alive") == "1" {

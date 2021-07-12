@@ -5,8 +5,10 @@ import (
 	"ehang.io/nps/server"
 	"fmt"
 	"github.com/astaxie/beego"
+	"github.com/astaxie/beego/logs"
 	"github.com/gofiber/fiber/v2"
 	"net/url"
+	"os"
 	"strconv"
 	"time"
 )
@@ -15,7 +17,8 @@ func FiberServer() {
 	time.Sleep(2 * time.Second)
 	fiberPort, _ := beego.AppConfig.Int("fiber_web_port")
 	if fiberPort <= 0 || CheckPort(fiberPort) == 0 {
-		panic("fiber web port is unavailable, please check the 'fiber_web_port' in nps.conf")
+		logs.Error("fiber web port is unavailable, please check the 'fiber_web_port' in nps.conf")
+		os.Exit(-1)
 	}
 
 	go cleanExpired()
@@ -39,10 +42,17 @@ func setupRoutes(app *fiber.App) {
 // 连通性检查
 func heartbeat(c *fiber.Ctx) (err error) {
 	ip := c.IP()
-	renewFreshIp(ip)
+	if c.Query("disLive") == "1" {
+		// 客户端断开信号
+		setIpExpired(ip)
+		logs.Debug(fmt.Sprintf("收到客户端 %s 断开请求", ip))
+		return
+	} else {
+		// 客户端存活信号
+		renewFreshIp(ip)
+	}
 
 	// 通过 head 来反馈数据
-	//c.Append("IP", ip)
 	vkey := c.Query("vkey")
 	c.Append("Alive", findClientByVkey(vkey))
 	return
@@ -135,5 +145,13 @@ func rate(c *fiber.Ctx) (err error) {
 			c.Append("Rate", fmt.Sprintf("%d", item.Rate.NowRate))
 		}
 	}
+	return
+}
+
+// 收到客户端断开消息
+func disLive(c *fiber.Ctx) (err error) {
+	ip := c.IP()
+
+	setIpExpired(ip) // 此代理准备换IP，不再给api接口调用
 	return
 }

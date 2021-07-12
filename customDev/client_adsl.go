@@ -3,6 +3,7 @@ package customDev
 import (
 	"ehang.io/nps/newgocommand"
 	"github.com/astaxie/beego/logs"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -75,8 +76,11 @@ func pppoeStatus() (status string) {
 	}
 
 	logs.Error("pppoe-status return unexpect: ", out)
-	if strings.Contains(out, "ppp2 is down") || strings.Contains(out, "Cannot find") {
+
+	pppDown, _ := regexp.MatchString(`ppp\d* is down`, out)
+	if pppDown || strings.Contains(out, "Cannot find") {
 		PppoeStop()
+		logs.Warning("pause pppoe for 1 minute")
 		time.Sleep(time.Minute)
 	}
 	return

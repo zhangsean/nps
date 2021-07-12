@@ -283,6 +283,7 @@ func CopyBuffer(dst io.Writer, src io.Reader, label ...string) (written int64, e
 		//if len(pr)>0 && pr[0] && nr > 50 {
 		//	logs.Warn(string(buf[:50]))
 		//}
+		//print(nr, "\n")
 		if nr > 0 {
 			nw, ew := dst.Write(buf[0:nr])
 			if nw > 0 {
@@ -302,6 +303,9 @@ func CopyBuffer(dst io.Writer, src io.Reader, label ...string) (written int64, e
 			break
 		}
 	}
+	//print(fmt.Printf("end....%d\n", goroutine.CopyConnsPool.Running()))
+	//goroutine.CopyConnsPool.Running()
+	//customDev.GetConnNum()
 	return written, err
 }
 
