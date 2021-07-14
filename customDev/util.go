@@ -10,6 +10,23 @@ import (
 	"time"
 )
 
+// tcp传递的命令
+const (
+	DIS_LIVE1           = "ds1"
+	DIS_LIVE2           = "ds2"
+	ROGER_DISLIVE       = "rds"
+	YOU_CAN_RESRART     = "yst"
+	IS_USING            = "tok"
+	NOT_USING           = "tno"
+	TIME_OVER           = "tov"
+	PING                = "pin"
+	PONG                = "pon"
+	ALIVE               = "alv"
+	VKEY_WRONG          = "vkw"
+	VERSION_WRONG       = "vsw"
+	TCP_WITH_NPS_FAILED = "tfd"
+)
+
 // 检查端口是否被占用
 func CheckPort(port int) int {
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))

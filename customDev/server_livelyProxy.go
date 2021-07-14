@@ -79,3 +79,20 @@ func findClientByVkey(vKey string) (exist string) {
 	}
 	return "0"
 }
+
+// 在列表里找到对应vKey的客户端
+func findClientByIp(ip string) (exist bool) {
+	list, num := server.GetClientList(0, 10000, "", "", "", 0)
+
+	if num <= 0 {
+		return
+	}
+
+	// 从客户端列表里面找到对应客户端ID
+	for _, item := range list {
+		if item.Addr == ip {
+			return true
+		}
+	}
+	return
+}

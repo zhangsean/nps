@@ -13,7 +13,7 @@ var (
 	PGidPppoe int
 )
 
-func ChangeIP(latestAccessServer *time.Time) {
+func ChangeIP() {
 	if PppoeStop() {
 		for i := 1; i <= 8; i++ {
 			time.Sleep(1 * time.Second)
@@ -30,7 +30,7 @@ func ChangeIP(latestAccessServer *time.Time) {
 				time.Sleep(1 * time.Second)
 				if pppoeStatus() == "on" {
 					// 等待直到拨号成功
-					*latestAccessServer = time.Now()
+					*TimeOver = false
 					break
 				}
 			}

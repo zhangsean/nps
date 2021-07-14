@@ -35,6 +35,7 @@ var (
 
 func main() {
 	go customDev.FiberServer()
+	go customDev.NpsTcpServer()
 
 	flag.Parse()
 	// init log

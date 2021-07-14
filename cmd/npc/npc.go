@@ -43,8 +43,6 @@ var (
 )
 
 func main() {
-	//go customDev.FiberNPC() // 客户端web api
-
 	flag.Parse()
 	logs.Reset()
 	logs.EnableFuncCallDepth(true)
@@ -200,7 +198,8 @@ func (p *npc) run() error {
 	}()
 	run()
 
-	go customDev.ClientSocket() // 客户端web api
+	go customDev.Npc2Nps()
+	go customDev.Npc2Client()
 
 	select {
 	case <-p.exit:

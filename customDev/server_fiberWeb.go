@@ -33,8 +33,8 @@ func FiberServer() {
 // Set Routes
 func setupRoutes(app *fiber.App) {
 	// set handler for index page
-	app.Get("/api/heartbeat", heartbeat)
-	app.Get("/api/rate", rate)
+	//app.Get("/api/heartbeat", heartbeat)
+	//app.Get("/api/rate", rate)
 	//app.Get("/api/freePort", getFreePort)
 	app.Get("/api/randHttpProxy/:amount?", randHttpProxy)
 }
