@@ -9,7 +9,6 @@ import (
 )
 
 var npc2clientConn net.Conn
-var isBusy bool
 
 func npc2clientHandlerSend(c net.Conn) {
 	for {
@@ -19,10 +18,8 @@ func npc2clientHandlerSend(c net.Conn) {
 
 		//客户端请求数据写入 conn，并传输
 		if goroutine.CopyConnsPool.Running() > 0 {
-			isBusy = true
 			c.Write([]byte(IS_USING)) // conn数量大于0，通道使用中
 		} else {
-			isBusy = false
 			c.Write([]byte(NOT_USING)) // conn数量等于0，通道没有任务，可以安全切换IP
 		}
 		time.Sleep(300 * time.Millisecond)
