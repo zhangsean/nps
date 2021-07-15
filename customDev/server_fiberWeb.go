@@ -33,29 +33,8 @@ func FiberServer() {
 // Set Routes
 func setupRoutes(app *fiber.App) {
 	// set handler for index page
-	//app.Get("/api/heartbeat", heartbeat)
-	//app.Get("/api/rate", rate)
 	//app.Get("/api/freePort", getFreePort)
 	app.Get("/api/randHttpProxy/:amount?", randHttpProxy)
-}
-
-// 连通性检查
-func heartbeat(c *fiber.Ctx) (err error) {
-	ip := c.IP()
-	if c.Query("disLive") == "1" {
-		// 客户端断开信号
-		setIpExpired(ip)
-		logs.Debug(fmt.Sprintf("收到客户端 %s 断开请求", ip))
-		return
-	} else {
-		// 客户端存活信号
-		renewFreshIp(ip)
-	}
-
-	// 通过 head 来反馈数据
-	vkey := c.Query("vkey")
-	c.Append("Alive", findClientByVkey(vkey))
-	return
 }
 
 // 返回一个空闲可用端口, 注意防火墙开启端口
@@ -145,13 +124,5 @@ func rate(c *fiber.Ctx) (err error) {
 			c.Append("Rate", fmt.Sprintf("%d", item.Rate.NowRate))
 		}
 	}
-	return
-}
-
-// 收到客户端断开消息
-func disLive(c *fiber.Ctx) (err error) {
-	ip := c.IP()
-
-	setIpExpired(ip) // 此代理准备换IP，不再给api接口调用
 	return
 }
