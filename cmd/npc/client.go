@@ -121,7 +121,7 @@ TellServer:
 	for {
 		// 是否已经成功通知服务端我即将离线
 		if *customDev.NoticedRestart {
-			logs.Debug("Already tell server my disLive")
+			logs.Debug("NPS got my disLive request")
 			goto End
 		}
 

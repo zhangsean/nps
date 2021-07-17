@@ -286,6 +286,7 @@ func dealClientData() {
 		if vv, ok := Bridge.Client.Load(v.Id); ok {
 			v.IsConnect = true
 			v.Version = vv.(*bridge.Client).Version
+			v.LastConnectTime = time.Now().Unix() // 记录客户端存活时间
 		} else {
 			v.IsConnect = false
 		}
