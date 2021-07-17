@@ -32,6 +32,7 @@ type Config struct {
 }
 
 type Client struct {
+	LastConnectTime int64 // 上次客户端成功建立连接的时间
 	Cnf             *Config
 	Id              int        //id
 	VerifyKey       string     //verify key
