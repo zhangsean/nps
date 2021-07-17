@@ -181,7 +181,22 @@
                     if (row.Client.IsConnect) {
                         return '<span class="badge badge-primary" langtag="word-online"></span>'
                     } else {
-                        return '<span class="badge badge-badge" langtag="word-offline"></span>'
+                        if (row.Client.LastConnectTime === 0) {
+                            return '<span class="badge badge-primary">从未连接</span>'
+                        }
+
+                        // 在列表页显示存活或者长期离线提示
+                        let now = Date.parse(new Date())/1000;
+                        let offMinute = parseInt((now - row.Client.LastConnectTime)/60)
+                        let msg
+
+                        if (offMinute < 10) {
+                            msg = offMinute +'分钟'
+                        } else {
+                            msg = '<span style=color:red>' + offMinute +'分钟</span>'
+                        }
+
+                        return '<span class="badge badge-badge" langtag="word-offline"></span> ' + msg
                     }
                 }
             },
