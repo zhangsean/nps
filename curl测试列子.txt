@@ -1,0 +1,48 @@
+netstat -anp|grep 端口号
+/opt/nps/conf/npc.conf
+
+sudo gedit /var/log/npc.log
+
+sudo ./npc install
+sudo ./npc uninstall
+
+sudo ./npc install -config=/home/pgshow/Desktop/goP/nps/conf/npc.conf
+
+curl -x doge:doge@127.0.0.1:10000 www.baidu.com
+curl -x doge:doge@127.0.0.1:10000 www.baidu.com
+curl -x doge:doge@127.0.0.1:10000 https://speed.hetzner.de/1GB.bin -o test.tmp
+curl -x doge:doge@111.220.213.36:10000 www.baidu.com
+curl -x doge:doge@111.220.213.36:10000 https://down.qq.com/qqweb/PCQQ/PCQQ_EXE/PCQQ2021.exe -o test.tmp
+curl -x doge:doge@111.220.213.36:10000 -A "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.9; rv:32.0) Gecko/20100101 Firefox/32.0" www.baidu.com
+curl -x doge:doge@111.220.213.36:10000 https://jx3wscs-fullupdatehttps.dl.kingsoft.com/jx3v4_launcher/JX3Installer_1.0.0.779_Official.exe -o test.tmp
+curl -x doge:doge@127.0.0.1:10000 https://jx3wscs-fullupdatehttps.dl.kingsoft.com/jx3v4_launcher/JX3Installer_1.0.0.779_Official.exe -o test.tmp
+curl -x doge:doge@111.220.213.36:10000 https://download3.vmware.com/software/wkst/file/VMware-workstation-full-16.1.2-17966106.exe -o test.tmp
+curl -x doge:doge@111.220.213.36:10000 https://jx3wscs-fullupdatehttps.dl.kingsoft.com/jx3v4_launcher/JX3Installer_1.0.0.779_Official.exe -o test.tmp
+
+curl -x doge:doge@127.0.0.1:10000 https://download3.vmware.com/software/wkst/file/VMware-workstation-full-16.1.2-17966106.exe -o test.tmp
+curl -x doge:doge@127.0.0.1:10000 www.baidu.com -A "Mozilla/5.0 (X11; Linux x86_64; rv:60.0) Gecko/20100101 Firefox/81.0"
+
+./p.sh 宽带账号 密码 eth1
+
+//read flag
+func (s *Conn) ReadFlag() (string, error) {
+	buf := make([]byte, 4)
+	return string(buf), binary.Read(s, binary.LittleEndian, &buf)
+}
+
+curl -x doge:doge@111.220.213.36:10000 www.baidu.com
+curl -x doge:doge@111.220.213.36:10001 www.baidu.com
+curl -x doge:doge@111.220.213.36:10002 www.baidu.com
+curl -x doge:doge@111.220.213.36:10003 www.baidu.com
+curl -x doge:doge@111.220.213.36:10004 www.baidu.com
+curl -x doge:doge@111.220.213.36:10005 www.baidu.com
+
+curl -m 10 --proxy-insecure -x http://127.0.0.1:8089 -k https://ip.ihuan.me/
+
+curl -m 10 --proxy-insecure -x http://221.122.91.64:80 -k http://ip.cip.cc
+
+curl -m 10 -x http://127.0.0.1:8089 -k http://httpbin.org/get
+
+curl -m 10 -x http://127.0.0.1:8089 -k http://www.66ip.cn
+
+
