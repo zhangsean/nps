@@ -50,11 +50,11 @@ type Bridge struct {
 	CloseClient    chan int
 	SecretChan     chan *conn.Secret
 	ipVerify       bool
-	runList        sync.Map //map[int]interface{}
+	runList        *sync.Map //map[int]interface{}
 	disconnectTime int
 }
 
-func NewTunnel(tunnelPort int, tunnelType string, ipVerify bool, runList sync.Map, disconnectTime int) *Bridge {
+func NewTunnel(tunnelPort int, tunnelType string, ipVerify bool, runList *sync.Map, disconnectTime int) *Bridge {
 	return &Bridge{
 		TunnelPort:     tunnelPort,
 		tunnelType:     tunnelType,
@@ -286,12 +286,12 @@ func (s *Bridge) typeDeal(typeVal string, c *conn.Conn, id int, vs string) {
 				return
 			} else {
 				//向密钥对应的客户端发送与服务端udp建立连接信息，地址，密钥
-				v.(*Client).signal.Write([]byte(common.NEW_UDP_CONN))
-				svrAddr := beego.AppConfig.String("p2p_ip") + ":" + beego.AppConfig.String("p2p_port")
+				_, err = v.(*Client).signal.Write([]byte(common.NEW_UDP_CONN))
 				if err != nil {
-					logs.Warn("get local udp addr error")
+					logs.Warn("send udp addr error")
 					return
 				}
+				svrAddr := beego.AppConfig.String("p2p_ip") + ":" + beego.AppConfig.String("p2p_port")
 				v.(*Client).signal.WriteLenContent([]byte(svrAddr))
 				v.(*Client).signal.WriteLenContent(b)
 				//向该请求者发送建立连接请求,服务器地址
@@ -524,8 +524,8 @@ loop:
 							s.OpenTask <- tl
 						}
 					}
-					c.WriteAddOk()
 				}
+				c.WriteAddOk()
 			}
 		}
 	}

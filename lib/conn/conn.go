@@ -275,6 +275,9 @@ func (s *Conn) Close() error {
 
 //write
 func (s *Conn) Write(b []byte) (int, error) {
+	if s == nil {
+		return -1, errors.New("connection error")
+	}
 	return s.Conn.Write(b)
 }
 
