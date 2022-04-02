@@ -81,7 +81,7 @@ POST /client/del/
 | id | 要删除的客户端id |
 
 ***
-获取域名解析列表
+获取域名代理列表
 
 ```
 POST /index/hostlist/
@@ -94,7 +94,7 @@ POST /index/hostlist/
 | limit | 条数(分页显示的条数) |
 
 ***
-添加域名解析
+添加域名代理
 
 ```
 POST /index/addhost/
@@ -113,7 +113,7 @@ POST /index/addhost/
 | hostchange | request host 请求主机 |
 
 ***
-修改域名解析
+修改域名代理
 
 ```
 POST /index/edithost/
@@ -129,10 +129,10 @@ POST /index/edithost/
 | target | 内网目标(ip:端口) |
 | header | request header 请求头 |
 | hostchange | request host 请求主机 |
-| id | 需要修改的域名解析id |
+| id | 需要修改的域名代理id |
 
 ***
-删除域名解析
+删除域名代理
 
 ```
 POST /index/delhost/
@@ -140,7 +140,7 @@ POST /index/delhost/
 
 | 参数 | 含义 |
 | --- | --- |
-| id | 需要删除的域名解析id |
+| id | 需要删除的域名代理id |
 
 ***
 获取单条隧道信息

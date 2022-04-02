@@ -24,7 +24,7 @@
 	</lang>
 
 	<lang id="scheme-host">
-		<zh-CN>域名解析</zh-CN>
+		<zh-CN>域名代理</zh-CN>
 		<en-US>Host</en-US>
 	</lang>
 	<lang id="scheme-tcp">
@@ -627,7 +627,7 @@
 		<en-US>Powerful extension functions, everything is available (cache, compression, encryption, traffic limit, bandwidth limit, port reuse, etc.)</en-US>
 	</lang>
 	<lang id="info-feature8">
-		<zh-CN>域名解析具备自定义header、404页面配置、host修改、站点保护、URL路由、泛解析等功能</zh-CN>
+		<zh-CN>域名代理具备自定义header、404页面配置、host修改、站点保护、URL路由、泛解析等功能</zh-CN>
 		<en-US>Domain name resolution has functions such as custom headers, 404 page configuration, host modification, site protection, URL routing, and pan-resolution.</en-US>
 	</lang>
 	<lang id="info-feature9">
