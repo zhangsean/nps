@@ -3,6 +3,7 @@ package bridge
 import (
 	"ehang.io/nps-mux"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -261,7 +262,7 @@ func (s *Bridge) typeDeal(typeVal string, c *conn.Conn, id int, vs string) {
 			return
 		}
 		binary.Write(c, binary.LittleEndian, isPub)
-		go s.getConfig(c, isPub, client)
+		go s.processClientConfig(c, isPub, client)
 	case common.WORK_REGISTER:
 		go s.register(c)
 	case common.WORK_SECRET:
@@ -388,7 +389,7 @@ func (s *Bridge) ping() {
 }
 
 //get config and add task from client config
-func (s *Bridge) getConfig(c *conn.Conn, isPub bool, client *file.Client) {
+func (s *Bridge) processClientConfig(c *conn.Conn, isPub bool, client *file.Client) {
 	var fail bool
 loop:
 	for {
@@ -401,26 +402,96 @@ loop:
 			if b, err := c.GetShortContent(32); err != nil {
 				break loop
 			} else {
-				var str string
+				var httpProxyPort string = beego.AppConfig.String("http_proxy_port")
+				var httpsProxyPort string = beego.AppConfig.String("https_proxy_port")
+
 				id, err := file.GetDb().GetClientIdByVkey(string(b))
 				if err != nil {
 					break loop
 				}
+
+				clt, err := file.GetDb().GetClient(id)
+				if err != nil {
+					break loop
+				}
+
+				status := file.WorkStatus {
+					Id: id,
+					Enable: clt.Status,
+					RateLimit: clt.RateLimit,
+					NoStore: clt.NoStore,
+					NoDisplay: clt.NoDisplay,
+					MaxConn: clt.MaxConn,
+					NowConn: clt.NowConn,
+					MaxTunnelNum: clt.MaxTunnelNum,
+				}
+
+				if clt.Flow != nil {
+					status.ExportFlow = clt.Flow.ExportFlow
+					status.InletFlow = clt.Flow.InletFlow
+					status.FlowLimit = clt.Flow.FlowLimit
+				}
+
 				file.GetDb().JsonDb.Hosts.Range(func(key, value interface{}) bool {
 					v := value.(*file.Host)
 					if v.Client.Id == id {
-						str += v.Remark + common.CONN_DATA_SEQ
+						//str += v.Remark + common.CONN_DATA_SEQ
+						targetStr := strings.ReplaceAll(v.Target.TargetStr, "\n", ",")
+						status.TaskStatus = append(status.TaskStatus, file.TaskStatus {
+														Mode: "host",
+														Remark: v.Remark,
+														Scheme: v.Scheme,
+														ServerHost: fmt.Sprintf("%s%s", v.Host, v.Location),
+														ServerPort: fmt.Sprintf("%s:%s", httpProxyPort, httpsProxyPort),
+														TargetAddr: targetStr,
+														TargetAddrAlive: strings.Join(v.Target.TargetArr, ","),
+														Enable: true})
+
 					}
+
 					return true
 				})
 				file.GetDb().JsonDb.Tasks.Range(func(key, value interface{}) bool {
 					v := value.(*file.Tunnel)
 					//if _, ok := s.runList[v.Id]; ok && v.Client.Id == id {
 					if _, ok := s.runList.Load(v.Id); ok && v.Client.Id == id {
-						str += v.Remark + common.CONN_DATA_SEQ
+						//str += v.Remark + common.CONN_DATA_SEQ
+						targetAddr := v.TargetAddr
+						if targetAddr == "" {
+							targetAddr = "127.0.0.1"
+						}
+						targetStr := strings.ReplaceAll(v.Target.TargetStr, "\n", ",")
+						if targetStr == "" {
+							targetStr = targetAddr
+						} else if strings.Index(targetStr, ":") < 0 {
+							targetStr = fmt.Sprintf("%s:%s", v.TargetAddr, targetStr)
+						}
+
+						serverPort := strconv.Itoa(v.Port)
+						if v.Mode == "p2p" {
+							if p, err := beego.AppConfig.Int("p2p_port"); err == nil {
+								serverPort = fmt.Sprintf("%d:%d:%d", p, p + 1, p + 2)
+							}
+						}
+
+						status.TaskStatus = append(status.TaskStatus, file.TaskStatus {
+														Mode: v.Mode,
+														Remark: v.Remark,
+														Scheme: "",
+														ServerHost: v.ServerIp,
+														ServerPort: serverPort,
+														TargetAddr: targetStr,
+														TargetAddrAlive: strings.Join(v.Target.TargetArr, ","),
+														Enable: v.Status })
 					}
 					return true
 				})
+
+				str, err := json.Marshal(status)
+				if err != nil {
+					str = []byte("error")
+				}
+
 				binary.Write(c, binary.LittleEndian, int32(len([]byte(str))))
 				binary.Write(c, binary.LittleEndian, []byte(str))
 			}
@@ -469,30 +540,64 @@ loop:
 				c.WriteAddFail()
 				break loop
 			} else {
-				ports := common.GetPorts(t.Ports)
-				targets := common.GetPorts(t.Target.TargetStr)
-				if len(ports) > 1 && (t.Mode == "tcp" || t.Mode == "udp") && (len(ports) != len(targets)) {
-					fail = true
-					c.WriteAddFail()
-					break loop
-				} else if t.Mode == "secret" || t.Mode == "p2p" {
-					ports = append(ports, 0)
+				if t.TargetAddr == "" {
+					t.TargetAddr = "127.0.0.1"
 				}
+
+				ports := common.GetPorts(t.Ports)
+				if t.Ports == "0" {
+					randomPort := tool.GetRandomPort()
+					if randomPort != 0 {
+						ports = append(ports, randomPort);
+					}
+				}
+
+				targets := common.GetPorts(t.Target.TargetStr)
+				if (t.Mode == "tcp" || t.Mode == "udp") && (len(ports) != len(targets)) {
+					if len(ports) > 1 {
+						fail = true
+						c.WriteAddFail()
+						break loop
+					}
+					if len(targets) == 0 {
+						addrs := strings.Split(t.TargetAddr, ":")
+						if len(addrs) != 2 {
+							fail = true
+							c.WriteAddFail()
+							break loop
+						}
+
+						t.TargetAddr = addrs[0]
+						target, err := strconv.Atoi(addrs[1])
+						if err != nil {
+							fail = true
+							c.WriteAddFail()
+							break loop
+						}
+						targets = append(targets, target)
+					}
+				} else if t.Mode == "secret" || t.Mode == "p2p" {
+					ports = make([]int, 1, 1)
+				}
+
 				if len(ports) == 0 {
 					fail = true
 					c.WriteAddFail()
 					break loop
 				}
+
 				for i := 0; i < len(ports); i++ {
 					tl := new(file.Tunnel)
 					tl.Mode = t.Mode
 					tl.Port = ports[i]
 					tl.ServerIp = t.ServerIp
+					tl.TargetAddr = t.TargetAddr
+					tl.Remark = t.Remark + "_" + strconv.Itoa(tl.Port)
 					if len(ports) == 1 {
 						tl.Target = t.Target
-						tl.Remark = t.Remark
+						//tl.Remark = t.Remark
 					} else {
-						tl.Remark = t.Remark + "_" + strconv.Itoa(tl.Port)
+						//tl.Remark = t.Remark + "_" + strconv.Itoa(tl.Port)
 						tl.Target = new(file.Target)
 						if t.TargetAddr != "" {
 							tl.Target.TargetStr = t.TargetAddr + ":" + strconv.Itoa(targets[i])

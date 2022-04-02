@@ -16,6 +16,7 @@ import (
 var (
 	ports        []int
 	ServerStatus []map[string]interface{}
+	usedPorts    map[int]int
 )
 
 func StartSystemInfo() {
@@ -28,6 +29,33 @@ func StartSystemInfo() {
 func InitAllowPort() {
 	p := beego.AppConfig.String("allow_ports")
 	ports = common.GetPorts(p)
+	usedPorts = make(map[int]int)
+}
+
+func MarkPortClosed(port int) {
+	if usedPorts != nil {
+		delete(usedPorts, port)
+	}
+}
+
+func MarkPortUsed(port int) {
+	if usedPorts != nil {
+		usedPorts[port] = 1
+	}
+}
+
+func GetRandomPort() (int) {
+	if len(ports) == 0 || usedPorts == nil {
+		return 0
+	}
+
+	for _, v := range ports {
+		if usedPorts[v] != 1 {
+			return v
+		}
+	}
+
+	return 0
 }
 
 func TestServerPort(p int, m string) (b bool) {

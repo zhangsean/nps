@@ -12,6 +12,7 @@ require (
 	github.com/dsnet/compress v0.0.1 // indirect
 	github.com/golang/snappy v0.0.3
 	github.com/hooklift/assert v0.0.0-20170704181755-9d1defd6d214 // indirect
+	github.com/jedib0t/go-pretty/v6 v6.3.0
 	github.com/kardianos/service v1.2.0
 	github.com/klauspost/cpuid v1.3.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.6 // indirect

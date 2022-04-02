@@ -219,6 +219,9 @@ func dealTunnel(s string) *file.Tunnel {
 	t := &file.Tunnel{}
 	t.Target = new(file.Target)
 	for _, v := range splitStr(s) {
+		if len(v) <= 1 || v[:1] == "#" {
+			continue
+		}
 		item := strings.Split(v, "=")
 		if len(item) == 0 {
 			continue
@@ -233,6 +236,7 @@ func dealTunnel(s string) *file.Tunnel {
 		case "mode":
 			t.Mode = item[1]
 		case "target_addr":
+			t.TargetAddr = item[1]
 			t.Target.TargetStr = strings.Replace(item[1], ",", "\n", -1)
 		case "target_port":
 			t.Target.TargetStr = item[1]

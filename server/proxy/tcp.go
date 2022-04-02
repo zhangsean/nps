@@ -12,6 +12,7 @@ import (
 	"ehang.io/nps/lib/conn"
 	"ehang.io/nps/lib/file"
 	"ehang.io/nps/server/connection"
+	"ehang.io/nps/server/tool"
 	"github.com/astaxie/beego"
 	"github.com/astaxie/beego/logs"
 )
@@ -33,6 +34,7 @@ func NewTunnelModeServer(process process, bridge NetBridge, task *file.Tunnel) *
 
 //开始
 func (s *TunnelModeServer) Start() error {
+	tool.MarkPortUsed(s.task.Port)
 	return conn.NewTcpListenerAndProcess(s.task.ServerIp+":"+strconv.Itoa(s.task.Port), func(c net.Conn) {
 		if err := s.CheckFlowAndConnNum(s.task.Client); err != nil {
 			logs.Warn("client id %d, task id %d,error %s, when tcp connection", s.task.Client.Id, s.task.Id, err.Error())
@@ -47,6 +49,7 @@ func (s *TunnelModeServer) Start() error {
 
 //close
 func (s *TunnelModeServer) Close() error {
+	tool.MarkPortClosed(s.task.Port)
 	return s.listener.Close()
 }
 

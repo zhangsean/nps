@@ -23,66 +23,118 @@ import (
 	"ehang.io/nps/lib/config"
 	"ehang.io/nps/lib/conn"
 	"ehang.io/nps/lib/crypt"
+	"ehang.io/nps/lib/file"
 	"ehang.io/nps/lib/version"
 	"github.com/astaxie/beego/logs"
 	"github.com/xtaci/kcp-go"
 	"golang.org/x/net/proxy"
+	"github.com/jedib0t/go-pretty/v6/table"
 )
 
-func GetTaskStatus(path string) {
+func printWorkStatus(status *file.WorkStatus) {
+	var t *file.TaskStatus
+	var i, j, count int
+	var ports []string
+	var scheme, host, location, target string
+
+	tbl := table.NewWriter()
+    tbl.SetOutputMirror(os.Stdout)
+    tbl.AppendHeader(table.Row{"Mode", "Remark", "Scheme", "Server", "Target"})
+
+	count = len(status.TaskStatus)
+	for i = 0; i < count; i++ {
+		t = &status.TaskStatus[i]
+		if t.Mode == "host" {
+			ports = strings.Split(t.ServerPort, ":")
+			j = strings.Index(t.ServerHost, "/")
+			host = t.ServerHost[:j]
+			location = t.ServerHost[j:]
+			if len(ports) == 2 {
+				if ports[0] != "" {
+					tbl.AppendRows([]table.Row{
+						{t.Mode, t.Remark, t.Scheme, "http://" + host + ":" + ports[0] + location, "http://" + t.TargetAddr},
+					})
+				}
+
+				if ports[1] != "" {
+					tbl.AppendRows([]table.Row{
+						{t.Mode, t.Remark, t.Scheme, "https://" + host + ":" + ports[1] + location, "http://" + t.TargetAddr},
+					})
+				}
+			}
+		} else {
+			scheme = t.Scheme
+			target = ""
+			switch t.Mode {
+			case "tcp", "tcpTrans", "file", "secret":
+				scheme = "tcp"
+			case "socks5":
+				scheme = "socks5"
+			case "webServer", "httpHostServer":
+				scheme = "http"
+			case "httpProxy":
+				scheme = "http"
+				target = "tcp://" + t.TargetAddr + " -> http://domain"
+			case "udp":
+				scheme = "udp"
+			}
+
+			if scheme == "" {
+				scheme = t.Mode
+			}
+
+			if target == "" {
+				target = scheme + "://" + t.TargetAddr
+			}
+
+			host = t.ServerHost + ":" + t.ServerPort
+
+			if t.Mode == "p2p" {
+				host = ""
+				ports = strings.Split(t.ServerPort, ":")
+				for j, _ = range ports {
+					if len(host) > 0 {
+						host += "\n"
+					}
+					host += fmt.Sprintf("udp://%s:%s", t.ServerHost, ports[j])
+				}
+			}
+
+			tbl.AppendRows([]table.Row{
+				{t.Mode, t.Remark, scheme, host, target},
+			})
+		}
+		tbl.AppendSeparator()
+	}
+	//fmt.Printf("[%s](%s) %s://%s:%s -> %s://%s\n", t.Mode, t.Remark, t.Scheme, t.ServerHost, t.ServerPort, t.Scheme, t.TargetAddr)
+
+	tbl.SetStyle(table.StyleLight)
+    tbl.Render()
+}
+
+func PrintStatus(path string) {
+	var isPub bool
+
 	cnf, err := config.NewConfig(path)
 	if err != nil {
 		log.Fatalln(err)
+		return
 	}
 	c, err := NewConn(cnf.CommonConfig.Tp, cnf.CommonConfig.VKey, cnf.CommonConfig.Server, common.WORK_CONFIG, cnf.CommonConfig.ProxyUrl)
 	if err != nil {
 		log.Fatalln(err)
+		return
 	}
-	if _, err := c.Write([]byte(common.WORK_STATUS)); err != nil {
-		log.Fatalln(err)
-	}
-	//read now vKey and write to server
-	if f, err := common.ReadAllFromFile(filepath.Join(common.GetTmpPath(), "npc_vkey.txt")); err != nil {
-		log.Fatalln(err)
-	} else if _, err := c.Write([]byte(crypt.Md5(string(f)))); err != nil {
-		log.Fatalln(err)
-	}
-	var isPub bool
+
 	binary.Read(c, binary.LittleEndian, &isPub)
-	if l, err := c.GetLen(); err != nil {
+
+	status, err := c.GetWorkStatus()
+	if err != nil {
 		log.Fatalln(err)
-	} else if b, err := c.GetShortContent(l); err != nil {
-		log.Fatalln(err)
-	} else {
-		arr := strings.Split(string(b), common.CONN_DATA_SEQ)
-		for _, v := range cnf.Hosts {
-			if common.InStrArr(arr, v.Remark) {
-				log.Println(v.Remark, "ok")
-			} else {
-				log.Println(v.Remark, "not running")
-			}
-		}
-		for _, v := range cnf.Tasks {
-			ports := common.GetPorts(v.Ports)
-			if v.Mode == "secret" {
-				ports = append(ports, 0)
-			}
-			for _, vv := range ports {
-				var remark string
-				if len(ports) > 1 {
-					remark = v.Remark + "_" + strconv.Itoa(vv)
-				} else {
-					remark = v.Remark
-				}
-				if common.InStrArr(arr, remark) {
-					log.Println(remark, "ok")
-				} else {
-					log.Println(remark, "not running")
-				}
-			}
-		}
+		return
 	}
-	os.Exit(0)
+
+	printWorkStatus(status)
 }
 
 var errAdd = errors.New("The server returned an error, which port or host may have been occupied or not allowed to open.")
@@ -167,6 +219,14 @@ re:
 	//create local server secret or p2p
 	for _, v := range cnf.LocalServer {
 		go StartLocalServer(v, cnf.CommonConfig)
+	}
+
+	status, err := c.GetWorkStatus()
+	if err != nil {
+		logs.Error(err)
+	} else {
+		logs.Info("work status:")
+		printWorkStatus(status)
 	}
 
 	c.Close()

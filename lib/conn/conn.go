@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"fmt"
+	"path/filepath"
 
 	"ehang.io/nps/lib/common"
 	"ehang.io/nps/lib/crypt"
@@ -225,6 +227,48 @@ func (s *Conn) GetTaskInfo() (t *file.Tunnel, err error) {
 	t.NoStore = true
 	t.Flow = new(file.Flow)
 	return
+}
+
+//get status
+func (s *Conn) GetWorkStatus() (status *file.WorkStatus, err error) {
+	if _, err := s.Write([]byte(common.WORK_STATUS)); err != nil {
+		return nil, err
+	}
+	//read now vKey and write to server
+	if f, err := common.ReadAllFromFile(filepath.Join(common.GetTmpPath(), "npc_vkey.txt")); err != nil {
+		return nil, err
+	} else if _, err := s.Write([]byte(crypt.Md5(string(f)))); err != nil {
+		return nil, err
+	}
+	res, err := s.GetShortLenContent()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(res) <= 10 {
+		return nil, errors.New(fmt.Sprintf("response too short: %s", res))
+	}
+
+	addrs := strings.Split(s.RemoteAddr().String(), ":")
+
+	status = new(file.WorkStatus)
+
+	if err = json.Unmarshal(res, &status); err == nil {
+		count := len(status.TaskStatus)
+		for i := 0; i < count; i++ {
+			t := &status.TaskStatus[i]
+			if t.Mode == "secret" {
+				t.ServerPort = addrs[1]
+			}
+			if t.ServerHost == "" {
+				t.ServerHost = addrs[0]
+			}
+			t.ServerHost = strings.Replace(t.ServerHost, "0.0.0.0", addrs[0], -1)
+		}
+		return status, nil
+	}
+
+	return nil, err
 }
 
 //send  info

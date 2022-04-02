@@ -186,6 +186,32 @@ type Target struct {
 	sync.RWMutex
 }
 
+type TaskStatus struct {
+	Mode                string
+	Remark	            string
+	Scheme	            string
+	ServerHost          string
+	ServerPort          string
+	TargetAddr          string
+	TargetAddrAlive     string
+	Enable              bool
+}
+
+type WorkStatus struct {
+	Id                  int
+	Enable              bool       //is allow connect
+	RateLimit           int        //rate /kb
+	NoStore             bool       //no store to file
+	NoDisplay           bool       //no display on web
+	MaxConn             int        //the max connection num of client allow
+	NowConn             int32      //the connection num of now
+	MaxTunnelNum        int
+	ExportFlow          int64
+	InletFlow           int64
+	FlowLimit           int64
+	TaskStatus          []TaskStatus
+}
+
 type MultiAccount struct {
 	AccountMap map[string]string // multi account and pwd
 }

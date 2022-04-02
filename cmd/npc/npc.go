@@ -105,7 +105,8 @@ func main() {
 		case "status":
 			if len(os.Args) > 2 {
 				path := strings.Replace(os.Args[2], "-config=", "", -1)
-				client.GetTaskStatus(path)
+				client.PrintStatus(path)
+				os.Exit(0)
 			}
 		case "register":
 			flag.CommandLine.Parse(os.Args[2:])
