@@ -89,7 +89,8 @@ func (s *TRPClient) handleMain() {
 	for {
 		flags, err := s.signal.ReadFlag()
 		if err != nil {
-			logs.Error("Accept server data error %s, end this service", err.Error())
+			logs.Error("Accept server data error %s, end this service, local: %s, remote: %s", err.Error(),
+				s.signal.Conn.LocalAddr(), s.signal.Conn.RemoteAddr())
 			break
 		}
 		switch flags {

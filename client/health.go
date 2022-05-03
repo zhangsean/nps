@@ -17,6 +17,15 @@ import (
 var isStart bool
 var serverConn *conn.Conn
 
+type healthCheckHolder struct {
+	health        *file.Health
+	nextCheckTime time.Time
+}
+
+func (it *healthCheckHolder) Weight() int64 {
+	return it.nextCheckTime.UnixNano()
+}
+
 func heathCheck(healths []*file.Health, c *conn.Conn) bool {
 	serverConn = c
 	if isStart {
@@ -26,41 +35,34 @@ func heathCheck(healths []*file.Health, c *conn.Conn) bool {
 		return true
 	}
 	isStart = true
-	h := &sheap.IntHeap{}
+	h := &sheap.Heap{}
 	for _, v := range healths {
 		if v.HealthMaxFail > 0 && v.HealthCheckTimeout > 0 && v.HealthCheckInterval > 0 {
-			v.HealthNextTime = time.Now().Add(time.Duration(v.HealthCheckInterval) * time.Second)
-			heap.Push(h, v.HealthNextTime.Unix())
+			heap.Push(h, &healthCheckHolder{health: v, nextCheckTime: time.Now().Add(time.Duration(v.HealthCheckInterval) * time.Second)})
 			v.HealthMap = make(map[string]int)
 		}
 	}
-	go session(healths, h)
+	go session(h)
 	return true
 }
 
-func session(healths []*file.Health, h *sheap.IntHeap) {
+func session(h *sheap.Heap) {
 	for {
 		if h.Len() == 0 {
 			logs.Error("health check error")
 			break
 		}
-		rs := heap.Pop(h).(int64) - time.Now().Unix()
-		if rs <= 0 {
-			continue
+		v := heap.Pop(h).(*healthCheckHolder)
+		rs := v.nextCheckTime.UnixNano() - time.Now().UnixNano()
+		if rs > 0 {
+			time.Sleep(time.Duration(rs) * time.Nanosecond)
 		}
-		timer := time.NewTimer(time.Duration(rs) * time.Second)
-		select {
-		case <-timer.C:
-			for _, v := range healths {
-				if v.HealthNextTime.Before(time.Now()) {
-					v.HealthNextTime = time.Now().Add(time.Duration(v.HealthCheckInterval) * time.Second)
-					//check
-					go check(v)
-					//reset time
-					heap.Push(h, v.HealthNextTime.Unix())
-				}
-			}
-		}
+
+		v.nextCheckTime = time.Now().Add(time.Duration(v.health.HealthCheckInterval) * time.Second)
+		//check
+		go check(v.health)
+		//reset time
+		heap.Push(h, v)
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"ehang.io/nps/lib/rate"
 	"github.com/pkg/errors"
@@ -150,7 +149,6 @@ type Health struct {
 	HealthCheckTimeout  int
 	HealthMaxFail       int
 	HealthCheckInterval int
-	HealthNextTime      time.Time
 	HealthMap           map[string]int
 	HttpHealthUrl       string
 	HealthRemoveArr     []string
