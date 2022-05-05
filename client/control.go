@@ -212,8 +212,21 @@ func NewConn(tp string, vkey string, server string, connType string, proxyUrl st
 		}
 	}
 	if err != nil {
+		if connection != nil {
+			connection.Close()
+		}
 		return nil, err
 	}
+	verifiedConn, err := verifyConnection(tp, vkey, connType, connection)
+	if err != nil {
+		connection.Close() // close the connection if verification failed
+		return nil, err
+	} else {
+		return verifiedConn, nil
+	}
+}
+
+func verifyConnection(tp string, vkey string, connType string, connection net.Conn) (*conn.Conn, error) {
 	connection.SetDeadline(time.Now().Add(time.Second * 10))
 	defer connection.SetDeadline(time.Time{})
 	c := conn.NewConn(connection)
