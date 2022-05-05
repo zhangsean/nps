@@ -29,6 +29,8 @@ import (
 	"golang.org/x/net/proxy"
 )
 
+var ErrValidationKeyIncorrect = errors.New("validation key incorrect")
+
 func GetTaskStatus(path string) {
 	cnf, err := config.NewConfig(path)
 	if err != nil {
@@ -254,7 +256,8 @@ func verifyConnection(tp string, vkey string, connType string, connection net.Co
 	if s, err := c.ReadFlag(); err != nil {
 		return nil, err
 	} else if s == common.VERIFY_EER {
-		return nil, errors.New(fmt.Sprintf("Validation key %s incorrect", vkey))
+		logs.Error("Validation key %s incorrect", vkey)
+		return nil, ErrValidationKeyIncorrect
 	}
 	if _, err := c.Write([]byte(connType)); err != nil {
 		return nil, err
