@@ -32,4 +32,7 @@ require (
 	golang.org/x/sys v0.0.0-20210403161142-5e06dd20ab57 // indirect
 )
 
-replace github.com/astaxie/beego => github.com/exfly/beego v1.12.0-export-init
+replace (
+	github.com/astaxie/beego => github.com/exfly/beego v1.12.0-export-init
+	ehang.io/nps-mux => github.com/fangwentong/nps-mux v0.0.0-20220505120640-5438a7532d3d
+)

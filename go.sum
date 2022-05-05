@@ -43,6 +43,8 @@ github.com/envoyproxy/go-control-plane v0.9.4/go.mod h1:6rpuAdCZL397s3pYoYcLgu1m
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
 github.com/exfly/beego v1.12.0-export-init h1:VQNYKdXhAwZGUaFmQv8Aj921O3rQJZRIF8xeGrhsjrI=
 github.com/exfly/beego v1.12.0-export-init/go.mod h1:fysx+LZNZKnvh4GED/xND7jWtjCR6HzydR2Hh2Im57o=
+github.com/fangwentong/nps-mux v0.0.0-20220505120640-5438a7532d3d h1:NQSTq6Ua7g/eOysFv0l4GmP+5itPpUzdQpzBhYscILI=
+github.com/fangwentong/nps-mux v0.0.0-20220505120640-5438a7532d3d/go.mod h1:v54y/8ICChiM/aVUuKxGIcWwjm4HGNRyyAwbgLBoMbI=
 github.com/fredbi/uri v0.0.0-20181227131451-3dcfdacbaaf3 h1:FDqhDm7pcsLhhWl1QtD8vlzI4mm59llRvNzrFg6/LAA=
 github.com/fredbi/uri v0.0.0-20181227131451-3dcfdacbaaf3/go.mod h1:CzM2G82Q9BDUvMTGHnXf/6OExw/Dz2ivDj48nVg7Lg8=
 github.com/fsnotify/fsnotify v1.4.9 h1:hsms1Qyu0jgnwNXIxa+/V/PDsU6CfLf6CNO8H7IWoS4=
