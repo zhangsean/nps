@@ -98,24 +98,52 @@ func StartFromFile(path string) {
 	}
 	logs.Info("Loading configuration file %s successfully", path)
 
-re:
-	if first || cnf.CommonConfig.AutoReconnection {
-		if !first {
-			logs.Info("Reconnecting...")
-			time.Sleep(time.Second * 5)
+	for {
+		if first || cnf.CommonConfig.AutoReconnection {
+			if !first {
+				logs.Info("Reconnecting...")
+				time.Sleep(time.Second * 5)
+			}
+		} else {
+			return
 		}
-	} else {
-		return
+		first = false
+
+		vkey, err := preCheckConfig(cnf)
+		if err != nil {
+			continue
+		}
+
+		for _, v := range cnf.Tasks {
+			if v.Mode == "file" {
+				//start local file server
+				go startLocalFileServer(cnf.CommonConfig, v, vkey)
+			}
+		}
+		//create local server secret or p2p
+		for _, v := range cnf.LocalServer {
+			go StartLocalServer(v, cnf.CommonConfig)
+		}
+
+		if cnf.CommonConfig.Client.WebUserName == "" || cnf.CommonConfig.Client.WebPassword == "" {
+			logs.Notice("web access login username:user password:%s", vkey)
+		} else {
+			logs.Notice("web access login username:%s password:%s", cnf.CommonConfig.Client.WebUserName, cnf.CommonConfig.Client.WebPassword)
+		}
+		NewRPClient(cnf.CommonConfig.Server, vkey, cnf.CommonConfig.Tp, cnf.CommonConfig.ProxyUrl, cnf, cnf.CommonConfig.DisconnectTime).Start()
+		CloseLocalServer()
 	}
-	first = false
+}
+
+func preCheckConfig(cnf *config.Config) (string, error) {
 	c, err := NewConn(cnf.CommonConfig.Tp, cnf.CommonConfig.VKey, cnf.CommonConfig.Server, common.WORK_CONFIG, cnf.CommonConfig.ProxyUrl)
 	if err != nil {
 		logs.Error(err)
-		goto re
+		return "", err
 	}
+	defer c.Close()
 	var isPub bool
 	binary.Read(c, binary.LittleEndian, &isPub)
-
 	// get tmp password
 	var b []byte
 	vkey := cnf.CommonConfig.VKey
@@ -123,16 +151,16 @@ re:
 		// send global configuration to server and get status of config setting
 		if _, err := c.SendInfo(cnf.CommonConfig.Client, common.NEW_CONF); err != nil {
 			logs.Error(err)
-			goto re
+			return "", err
 		}
 		if !c.GetAddStatus() {
 			logs.Error("the web_user may have been occupied!")
-			goto re
+			return "", errors.New("the web_user may have been occupied!")
 		}
 
 		if b, err = c.GetShortContent(16); err != nil {
 			logs.Error(err)
-			goto re
+			return "", err
 		}
 		vkey = string(b)
 	}
@@ -142,11 +170,11 @@ re:
 	for _, v := range cnf.Hosts {
 		if _, err := c.SendInfo(v, common.NEW_HOST); err != nil {
 			logs.Error(err)
-			goto re
+			return "", err
 		}
 		if !c.GetAddStatus() {
 			logs.Error(errAdd, v.Host)
-			goto re
+			return "", errAdd
 		}
 	}
 
@@ -154,32 +182,14 @@ re:
 	for _, v := range cnf.Tasks {
 		if _, err := c.SendInfo(v, common.NEW_TASK); err != nil {
 			logs.Error(err)
-			goto re
+			return "", err
 		}
 		if !c.GetAddStatus() {
 			logs.Error(errAdd, v.Ports, v.Remark)
-			goto re
-		}
-		if v.Mode == "file" {
-			//start local file server
-			go startLocalFileServer(cnf.CommonConfig, v, vkey)
+			return "", errAdd
 		}
 	}
-
-	//create local server secret or p2p
-	for _, v := range cnf.LocalServer {
-		go StartLocalServer(v, cnf.CommonConfig)
-	}
-
-	c.Close()
-	if cnf.CommonConfig.Client.WebUserName == "" || cnf.CommonConfig.Client.WebPassword == "" {
-		logs.Notice("web access login username:user password:%s", vkey)
-	} else {
-		logs.Notice("web access login username:%s password:%s", cnf.CommonConfig.Client.WebUserName, cnf.CommonConfig.Client.WebPassword)
-	}
-	NewRPClient(cnf.CommonConfig.Server, vkey, cnf.CommonConfig.Tp, cnf.CommonConfig.ProxyUrl, cnf, cnf.CommonConfig.DisconnectTime).Start()
-	CloseLocalServer()
-	goto re
+	return vkey, nil
 }
 
 // Create a new connection with the server and verify it
