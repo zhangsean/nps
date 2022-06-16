@@ -131,6 +131,7 @@ func (pMux *PortMux) process(conn net.Conn) {
 		rs = buf
 	}
 	timer := time.NewTimer(ACCEPT_TIME_OUT)
+	defer timer.Stop()
 	select {
 	case <-timer.C:
 	case ch <- newPortConn(conn, rs, readMore):

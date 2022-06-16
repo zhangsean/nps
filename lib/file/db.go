@@ -198,7 +198,10 @@ func (s *DbUtils) GetHost(start, length int, id int, search string) ([]*Host, in
 }
 
 func (s *DbUtils) DelClient(id int) error {
-	s.JsonDb.Clients.Delete(id)
+	client, loaded := s.JsonDb.Clients.LoadAndDelete(id)
+	if loaded && client != nil {
+		client.(*Client).Close()
+	}
 	s.JsonDb.StoreClientsToJsonFile()
 	return nil
 }

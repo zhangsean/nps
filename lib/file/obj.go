@@ -123,6 +123,12 @@ func (s *Client) HasHost(h *Host) bool {
 	return has
 }
 
+func (s *Client) Close() {
+	if s.Rate != nil {
+		s.Rate.Stop()
+	}
+}
+
 type Tunnel struct {
 	Id           int
 	Port         int
