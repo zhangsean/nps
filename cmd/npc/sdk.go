@@ -23,7 +23,10 @@ func StartClientByVerifyKey(serverAddr, verifyKey, connType, proxyUrl *C.char) i
 
 //export GetClientStatus
 func GetClientStatus() int {
-	return client.NowStatus
+	if cl != nil {
+		return cl.Status()
+	}
+	return -1
 }
 
 //export CloseClient

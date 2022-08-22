@@ -91,67 +91,78 @@ func (s *Bridge) StartTunnel() error {
 
 //get health information form client
 func (s *Bridge) GetHealthFromClient(id int, c *conn.Conn) {
+	defer s.DelClient(id)
 	for {
-		if info, status, err := c.GetHealthInfo(); err != nil {
+		info, isHealth, err := c.GetHealthInfo()
+		if err != nil {
+			logs.Warn("get health info from client failed, err %s", err)
 			break
-		} else if !status { //the status is true , return target to the targetArr
-			file.GetDb().JsonDb.Tasks.Range(func(key, value interface{}) bool {
-				v := value.(*file.Tunnel)
-				if v.Client.Id == id && v.Mode == "tcp" && strings.Contains(v.Target.TargetStr, info) {
-					v.Lock()
-					if v.Target.TargetArr == nil || (len(v.Target.TargetArr) == 0 && len(v.HealthRemoveArr) == 0) {
-						v.Target.TargetArr = common.TrimArr(strings.Split(v.Target.TargetStr, "\n"))
-					}
-					v.Target.TargetArr = common.RemoveArrVal(v.Target.TargetArr, info)
-					if v.HealthRemoveArr == nil {
-						v.HealthRemoveArr = make([]string, 0)
-					}
-					v.HealthRemoveArr = append(v.HealthRemoveArr, info)
-					v.Unlock()
-				}
-				return true
-			})
-			file.GetDb().JsonDb.Hosts.Range(func(key, value interface{}) bool {
-				v := value.(*file.Host)
-				if v.Client.Id == id && strings.Contains(v.Target.TargetStr, info) {
-					v.Lock()
-					if v.Target.TargetArr == nil || (len(v.Target.TargetArr) == 0 && len(v.HealthRemoveArr) == 0) {
-						v.Target.TargetArr = common.TrimArr(strings.Split(v.Target.TargetStr, "\n"))
-					}
-					v.Target.TargetArr = common.RemoveArrVal(v.Target.TargetArr, info)
-					if v.HealthRemoveArr == nil {
-						v.HealthRemoveArr = make([]string, 0)
-					}
-					v.HealthRemoveArr = append(v.HealthRemoveArr, info)
-					v.Unlock()
-				}
-				return true
-			})
-		} else { //the status is false,remove target from the targetArr
-			file.GetDb().JsonDb.Tasks.Range(func(key, value interface{}) bool {
-				v := value.(*file.Tunnel)
-				if v.Client.Id == id && v.Mode == "tcp" && common.IsArrContains(v.HealthRemoveArr, info) && !common.IsArrContains(v.Target.TargetArr, info) {
-					v.Lock()
-					v.Target.TargetArr = append(v.Target.TargetArr, info)
-					v.HealthRemoveArr = common.RemoveArrVal(v.HealthRemoveArr, info)
-					v.Unlock()
-				}
-				return true
-			})
-
-			file.GetDb().JsonDb.Hosts.Range(func(key, value interface{}) bool {
-				v := value.(*file.Host)
-				if v.Client.Id == id && common.IsArrContains(v.HealthRemoveArr, info) && !common.IsArrContains(v.Target.TargetArr, info) {
-					v.Lock()
-					v.Target.TargetArr = append(v.Target.TargetArr, info)
-					v.HealthRemoveArr = common.RemoveArrVal(v.HealthRemoveArr, info)
-					v.Unlock()
-				}
-				return true
-			})
+		}
+		if isHealth {
+			s.markAsHealth(id, info)
+		} else {
+			s.markAsUnHealth(id, info)
 		}
 	}
-	s.DelClient(id)
+}
+
+func (s *Bridge) markAsUnHealth(id int, info string) {
+	file.GetDb().JsonDb.Tasks.Range(func(key, value interface{}) bool {
+		v := value.(*file.Tunnel)
+		if v.Client.Id == id && v.Mode == "tcp" && strings.Contains(v.Target.TargetStr, info) {
+			v.Lock()
+			if v.Target.TargetArr == nil || (len(v.Target.TargetArr) == 0 && len(v.HealthRemoveArr) == 0) {
+				v.Target.TargetArr = common.TrimArr(strings.Split(v.Target.TargetStr, "\n"))
+			}
+			v.Target.TargetArr = common.RemoveArrVal(v.Target.TargetArr, info)
+			if v.HealthRemoveArr == nil {
+				v.HealthRemoveArr = make([]string, 0)
+			}
+			v.HealthRemoveArr = append(v.HealthRemoveArr, info)
+			v.Unlock()
+		}
+		return true
+	})
+	file.GetDb().JsonDb.Hosts.Range(func(key, value interface{}) bool {
+		v := value.(*file.Host)
+		if v.Client.Id == id && strings.Contains(v.Target.TargetStr, info) {
+			v.Lock()
+			if v.Target.TargetArr == nil || (len(v.Target.TargetArr) == 0 && len(v.HealthRemoveArr) == 0) {
+				v.Target.TargetArr = common.TrimArr(strings.Split(v.Target.TargetStr, "\n"))
+			}
+			v.Target.TargetArr = common.RemoveArrVal(v.Target.TargetArr, info)
+			if v.HealthRemoveArr == nil {
+				v.HealthRemoveArr = make([]string, 0)
+			}
+			v.HealthRemoveArr = append(v.HealthRemoveArr, info)
+			v.Unlock()
+		}
+		return true
+	})
+}
+
+func (s *Bridge) markAsHealth(id int, info string) {
+	file.GetDb().JsonDb.Tasks.Range(func(key, value interface{}) bool {
+		v := value.(*file.Tunnel)
+		if v.Client.Id == id && v.Mode == "tcp" && common.IsArrContains(v.HealthRemoveArr, info) && !common.IsArrContains(v.Target.TargetArr, info) {
+			v.Lock()
+			v.Target.TargetArr = append(v.Target.TargetArr, info)
+			v.HealthRemoveArr = common.RemoveArrVal(v.HealthRemoveArr, info)
+			v.Unlock()
+		}
+		return true
+	})
+
+	file.GetDb().JsonDb.Hosts.Range(func(key, value interface{}) bool {
+		v := value.(*file.Host)
+		if v.Client.Id == id && common.IsArrContains(v.HealthRemoveArr, info) && !common.IsArrContains(v.Target.TargetArr, info) {
+			v.Lock()
+			v.Target.TargetArr = append(v.Target.TargetArr, info)
+			v.HealthRemoveArr = common.RemoveArrVal(v.HealthRemoveArr, info)
+			v.Unlock()
+		}
+		return true
+	})
 }
 
 //验证失败，返回错误验证flag，并且关闭连接
@@ -389,8 +400,7 @@ func (s *Bridge) ping() {
 
 //get config and add task from client config
 func (s *Bridge) getConfig(c *conn.Conn, isPub bool, client *file.Client) {
-	var fail bool
-loop:
+	var ok bool
 	for {
 		flag, err := c.ReadFlag()
 		if err != nil {
@@ -398,139 +408,156 @@ loop:
 		}
 		switch flag {
 		case common.WORK_STATUS:
-			if b, err := c.GetShortContent(32); err != nil {
-				break loop
-			} else {
-				var str string
-				id, err := file.GetDb().GetClientIdByVkey(string(b))
-				if err != nil {
-					break loop
-				}
-				file.GetDb().JsonDb.Hosts.Range(func(key, value interface{}) bool {
-					v := value.(*file.Host)
-					if v.Client.Id == id {
-						str += v.Remark + common.CONN_DATA_SEQ
-					}
-					return true
-				})
-				file.GetDb().JsonDb.Tasks.Range(func(key, value interface{}) bool {
-					v := value.(*file.Tunnel)
-					//if _, ok := s.runList[v.Id]; ok && v.Client.Id == id {
-					if _, ok := s.runList.Load(v.Id); ok && v.Client.Id == id {
-						str += v.Remark + common.CONN_DATA_SEQ
-					}
-					return true
-				})
-				binary.Write(c, binary.LittleEndian, int32(len([]byte(str))))
-				binary.Write(c, binary.LittleEndian, []byte(str))
-			}
+			ok = s.handleWorkStatusRequest(c)
 		case common.NEW_CONF:
-			var err error
-			if client, err = c.GetConfigInfo(); err != nil {
-				fail = true
-				c.WriteAddFail()
-				break loop
-			} else {
-				if err = file.GetDb().NewClient(client); err != nil {
-					fail = true
-					c.WriteAddFail()
-					break loop
-				}
-				c.WriteAddOk()
-				c.Write([]byte(client.VerifyKey))
-				s.Client.Store(client.Id, NewClient(nil, nil, nil, ""))
-			}
+			// new client from request config
+			client, ok = s.handleNewConfRequest(c, client)
 		case common.NEW_HOST:
-			h, err := c.GetHostInfo()
-			if err != nil {
-				fail = true
-				c.WriteAddFail()
-				break loop
-			}
-			h.Client = client
-			if h.Location == "" {
-				h.Location = "/"
-			}
-			if !client.HasHost(h) {
-				if file.GetDb().IsHostExist(h) {
-					fail = true
-					c.WriteAddFail()
-					break loop
-				} else {
-					file.GetDb().NewHost(h)
-					c.WriteAddOk()
-				}
-			} else {
-				c.WriteAddOk()
-			}
+			ok = s.handleNewHostRequest(c, client)
 		case common.NEW_TASK:
-			if t, err := c.GetTaskInfo(); err != nil {
-				fail = true
-				c.WriteAddFail()
-				break loop
-			} else {
-				ports := common.GetPorts(t.Ports)
-				targets := common.GetPorts(t.Target.TargetStr)
-				if len(ports) > 1 && (t.Mode == "tcp" || t.Mode == "udp") && (len(ports) != len(targets)) {
-					fail = true
-					c.WriteAddFail()
-					break loop
-				} else if t.Mode == "secret" || t.Mode == "p2p" {
-					ports = append(ports, 0)
-				}
-				if len(ports) == 0 {
-					fail = true
-					c.WriteAddFail()
-					break loop
-				}
-				for i := 0; i < len(ports); i++ {
-					tl := new(file.Tunnel)
-					tl.Mode = t.Mode
-					tl.Port = ports[i]
-					tl.ServerIp = t.ServerIp
-					if len(ports) == 1 {
-						tl.Target = t.Target
-						tl.Remark = t.Remark
-					} else {
-						tl.Remark = t.Remark + "_" + strconv.Itoa(tl.Port)
-						tl.Target = new(file.Target)
-						if t.TargetAddr != "" {
-							tl.Target.TargetStr = t.TargetAddr + ":" + strconv.Itoa(targets[i])
-						} else {
-							tl.Target.TargetStr = strconv.Itoa(targets[i])
-						}
-					}
-					tl.Id = int(file.GetDb().JsonDb.GetTaskId())
-					tl.Status = true
-					tl.Flow = new(file.Flow)
-					tl.NoStore = true
-					tl.Client = client
-					tl.Password = t.Password
-					tl.LocalPath = t.LocalPath
-					tl.StripPre = t.StripPre
-					tl.MultiAccount = t.MultiAccount
-					if !client.HasTunnel(tl) {
-						if err := file.GetDb().NewTask(tl); err != nil {
-							logs.Notice("Add task error ", err.Error())
-							fail = true
-							c.WriteAddFail()
-							break loop
-						}
-						if b := tool.TestServerPort(tl.Port, tl.Mode); !b && t.Mode != "secret" && t.Mode != "p2p" {
-							fail = true
-							c.WriteAddFail()
-							break loop
-						} else {
-							s.OpenTask <- tl
-						}
-					}
-					c.WriteAddOk()
-				}
-			}
+			ok = s.handleNewTaskRequest(c, client)
+		}
+		if !ok {
+			break
 		}
 	}
-	if fail && client != nil {
+	if !ok && client != nil {
 		s.DelClient(client.Id)
 	}
 	c.Close()
+}
+
+func (s *Bridge) handleWorkStatusRequest(c *conn.Conn) bool {
+	b, err := c.GetShortContent(32)
+	if err != nil {
+		logs.Warn("handle WORK_STATUS err, stage GetShortContent, %v", err)
+		return false
+	}
+	var str string
+	id, err := file.GetDb().GetClientIdByVkey(string(b))
+	if err != nil {
+		logs.Warn("handle WORK_STATUS err, stage GetClientIdByVkey, %v", err)
+		return false
+	}
+	file.GetDb().JsonDb.Hosts.Range(func(key, value interface{}) bool {
+		v := value.(*file.Host)
+		if v.Client.Id == id {
+			str += v.Remark + common.CONN_DATA_SEQ
+		}
+		return true
+	})
+	file.GetDb().JsonDb.Tasks.Range(func(key, value interface{}) bool {
+		v := value.(*file.Tunnel)
+		//if _, ok := s.runList[v.Id]; ok && v.Client.Id == id {
+		if _, ok := s.runList.Load(v.Id); ok && v.Client.Id == id {
+			str += v.Remark + common.CONN_DATA_SEQ
+		}
+		return true
+	})
+	binary.Write(c, binary.LittleEndian, int32(len([]byte(str))))
+	binary.Write(c, binary.LittleEndian, []byte(str))
+	return true
+}
+
+func (s *Bridge) handleNewConfRequest(c *conn.Conn, oldClient *file.Client) (*file.Client, bool) {
+	client, err := c.GetConfigInfo()
+	if err != nil {
+		c.WriteAddFail()
+		return oldClient, false
+	} else {
+		if err = file.GetDb().NewClient(client); err != nil {
+			c.WriteAddFail()
+			return oldClient, false
+		}
+		c.WriteAddOk()
+		c.Write([]byte(client.VerifyKey))
+		s.Client.Store(client.Id, NewClient(nil, nil, nil, ""))
+	}
+	return client, true
+}
+
+func (s *Bridge) handleNewHostRequest(c *conn.Conn, client *file.Client) bool {
+	h, err := c.GetHostInfo()
+	if err != nil {
+		c.WriteAddFail()
+		return false
+	}
+	h.Client = client
+	if h.Location == "" {
+		h.Location = "/"
+	}
+	if !client.HasHost(h) {
+		if file.GetDb().IsHostExist(h) {
+			c.WriteAddFail()
+			return false
+		} else {
+			file.GetDb().NewHost(h)
+			c.WriteAddOk()
+		}
+	} else {
+		c.WriteAddOk()
+	}
+	return true
+}
+
+func (s *Bridge) handleNewTaskRequest(c *conn.Conn, client *file.Client) bool {
+	t, err := c.GetTaskInfo()
+	if err != nil {
+		c.WriteAddFail()
+		return false
+	}
+	ports := common.GetPorts(t.Ports)
+	targets := common.GetPorts(t.Target.TargetStr)
+	if len(ports) > 1 && (t.Mode == "tcp" || t.Mode == "udp") && (len(ports) != len(targets)) {
+		c.WriteAddFail()
+		return false
+	} else if t.Mode == "secret" || t.Mode == "p2p" {
+		ports = append(ports, 0)
+	}
+	if len(ports) == 0 {
+		c.WriteAddFail()
+		return false
+	}
+	for i := 0; i < len(ports); i++ {
+		tl := new(file.Tunnel)
+		tl.Mode = t.Mode
+		tl.Port = ports[i]
+		tl.ServerIp = t.ServerIp
+		if len(ports) == 1 {
+			tl.Target = t.Target
+			tl.Remark = t.Remark
+		} else {
+			tl.Remark = t.Remark + "_" + strconv.Itoa(tl.Port)
+			tl.Target = new(file.Target)
+			if t.TargetAddr != "" {
+				tl.Target.TargetStr = t.TargetAddr + ":" + strconv.Itoa(targets[i])
+			} else {
+				tl.Target.TargetStr = strconv.Itoa(targets[i])
+			}
+		}
+		tl.Id = int(file.GetDb().JsonDb.GetTaskId())
+		tl.Status = true
+		tl.Flow = new(file.Flow)
+		tl.NoStore = true
+		tl.Client = client
+		tl.Password = t.Password
+		tl.LocalPath = t.LocalPath
+		tl.StripPre = t.StripPre
+		tl.MultiAccount = t.MultiAccount
+		if !client.HasTunnel(tl) {
+			if err := file.GetDb().NewTask(tl); err != nil {
+				logs.Notice("Add task error ", err.Error())
+				c.WriteAddFail()
+				return false
+			}
+			if b := tool.TestServerPort(tl.Port, tl.Mode); !b && t.Mode != "secret" && t.Mode != "p2p" {
+				c.WriteAddFail()
+				return false
+			} else {
+				s.OpenTask <- tl
+			}
+		}
+		c.WriteAddOk()
+	}
+	return true
 }

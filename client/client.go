@@ -31,6 +31,9 @@ type TRPClient struct {
 	cnf            *config.Config
 	disconnectTime int
 	once           sync.Once
+
+	nowStatus int
+	closed    bool
 }
 
 //new client
@@ -47,17 +50,13 @@ func NewRPClient(svraddr string, vKey string, bridgeConnType string, proxyUrl st
 	}
 }
 
-var NowStatus int
-var CloseClient bool
-
 //start
 func (s *TRPClient) Start() {
-	CloseClient = false
 retry:
-	if CloseClient {
+	if s.closed {
 		return
 	}
-	NowStatus = 0
+	s.nowStatus = 0
 	c, err := NewConn(s.bridgeConnType, s.vKey, s.svrAddr, common.WORK_MAIN, s.proxyUrl)
 	if err == ErrValidationKeyIncorrect {
 		return
@@ -81,8 +80,9 @@ retry:
 	if s.cnf != nil && len(s.cnf.Healths) > 0 {
 		go heathCheck(s.cnf.Healths, s.signal)
 	}
-	NowStatus = 1
+	s.nowStatus = 1
 	//msg connection, eg udp
+	// TODO: use heartbeat requests to keep the connection alive
 	s.handleMain()
 }
 
@@ -280,16 +280,19 @@ func (s *TRPClient) handleUdp(serverConn net.Conn) {
 	}
 }
 
+func (s *TRPClient) Status() int {
+	return s.nowStatus
+}
+
 // Whether the monitor channel is closed
 func (s *TRPClient) ping() {
 	s.ticker = time.NewTicker(time.Second * 5)
-loop:
 	for {
 		select {
 		case <-s.ticker.C:
 			if s.tunnel != nil && s.tunnel.IsClose {
 				s.Close()
-				break loop
+				return
 			}
 		}
 	}
@@ -300,8 +303,7 @@ func (s *TRPClient) Close() {
 }
 
 func (s *TRPClient) closing() {
-	CloseClient = true
-	NowStatus = 0
+	s.nowStatus = 0
 	if s.tunnel != nil {
 		_ = s.tunnel.Close()
 	}
@@ -311,4 +313,5 @@ func (s *TRPClient) closing() {
 	if s.ticker != nil {
 		s.ticker.Stop()
 	}
+	s.closed = true
 }

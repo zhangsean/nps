@@ -102,6 +102,7 @@ header_xxx|请求header修改或添加，header_proxy表示添加header proxy:np
 ```ini
 [common]
 server_addr=1.1.1.1:8024
+conn_type=tcp
 vkey=123
 [tcp]
 mode=tcp
