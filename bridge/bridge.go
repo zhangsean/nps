@@ -95,7 +95,7 @@ func (s *Bridge) GetHealthFromClient(id int, c *conn.Conn) {
 	for {
 		info, isHealth, err := c.GetHealthInfo()
 		if err != nil {
-			logs.Warn("get health info from client failed, err %s", err)
+			logs.Warn("get health info from client failed, client id %d, err %s", id, err)
 			break
 		}
 		if isHealth {
@@ -229,9 +229,7 @@ func (s *Bridge) DelClient(id int) {
 		if file.GetDb().IsPubClient(id) {
 			return
 		}
-		if c, err := file.GetDb().GetClient(id); err == nil {
-			s.CloseClient <- c.Id
-		}
+		s.CloseClient <- id
 	}
 }
 
