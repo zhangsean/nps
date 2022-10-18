@@ -24,7 +24,7 @@
 	</lang>
 
 	<lang id="scheme-host">
-		<zh-CN>域名解析</zh-CN>
+		<zh-CN>域名转发</zh-CN>
 		<en-US>Host</en-US>
 	</lang>
 	<lang id="scheme-tcp">
@@ -69,15 +69,15 @@
 		<en-US>Edit client</en-US>
 	</lang>
 	<lang id="page-hostlist">
-		<zh-CN>主机列表</zh-CN>
+		<zh-CN>域名列表</zh-CN>
 		<en-US>Host list</en-US>
 	</lang>
 	<lang id="page-hostadd">
-		<zh-CN>新增主机</zh-CN>
+		<zh-CN>新增域名</zh-CN>
 		<en-US>Add host</en-US>
 	</lang>
 	<lang id="page-hostedit">
-		<zh-CN>编辑主机</zh-CN>
+		<zh-CN>编辑域名</zh-CN>
 		<en-US>Edit host</en-US>
 	</lang>
 	<lang id="page-listclientid">
@@ -254,7 +254,7 @@
 		<en-US>Manual</en-US>
 	</lang>
 	<lang id="word-host">
-		<zh-CN>主机</zh-CN>
+		<zh-CN>域名</zh-CN>
 		<en-US>Host</en-US>
 	</lang>
 	<lang id="word-http">HTTP
@@ -400,7 +400,7 @@
 		<en-US>Header modify</en-US>
 	</lang>
 	<lang id="word-requesthost">
-		<zh-CN>请求主机信息修改</zh-CN>
+		<zh-CN>请求域名信息修改</zh-CN>
 		<en-US>Host modify</en-US>
 	</lang>
 	<lang id="word-runstatus">
@@ -627,7 +627,7 @@
 		<en-US>Powerful extension functions, everything is available (cache, compression, encryption, traffic limit, bandwidth limit, port reuse, etc.)</en-US>
 	</lang>
 	<lang id="info-feature8">
-		<zh-CN>域名解析具备自定义header、404页面配置、host修改、站点保护、URL路由、泛解析等功能</zh-CN>
+		<zh-CN>域名转发具备自定义header、404页面配置、host修改、站点保护、URL路由、泛域名转发等功能</zh-CN>
 		<en-US>Domain name resolution has functions such as custom headers, 404 page configuration, host modification, site protection, URL routing, and pan-resolution.</en-US>
 	</lang>
 	<lang id="info-feature9">
@@ -708,7 +708,7 @@
 			<en-US>Add error, the client can not be found</en-US>
 		</lang>
 		<lang id="addfailhosthasexist">
-			<zh-CN>添加失败，主机已存在</zh-CN>
+			<zh-CN>添加失败，域名已存在</zh-CN>
 			<en-US>Add fail, host has exist</en-US>
 		</lang>
 		<lang id="addsuccess">
@@ -724,7 +724,7 @@
 			<en-US>Delete success</en-US>
 		</lang>
 		<lang id="hosthasexist">
-			<zh-CN>主机已存在</zh-CN>
+			<zh-CN>域名已存在</zh-CN>
 			<en-US>Host has exist</en-US>
 		</lang>
 		<lang id="modifiederrortheclientisnotexist">
