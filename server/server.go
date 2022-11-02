@@ -59,6 +59,7 @@ func DealBridgeTask() {
 		case t := <-Bridge.CloseTask:
 			StopServer(t.Id)
 		case id := <-Bridge.CloseClient:
+			logs.Debug("delete tunnel and host for client id %d", id)
 			DelTunnelAndHostByClientId(id, true)
 			if v, ok := file.GetDb().JsonDb.Clients.Load(id); ok {
 				if v.(*file.Client).NoStore {
@@ -100,6 +101,7 @@ func StartNewServer(bridgePort int, cnf *file.Tunnel, bridgeType string, bridgeD
 	}
 	go DealBridgeTask()
 	go dealClientFlow()
+	go dealLeakTasks()
 	if svr := NewMode(Bridge, cnf); svr != nil {
 		if err := svr.Start(); err != nil {
 			logs.Error(err)
@@ -118,6 +120,17 @@ func dealClientFlow() {
 		select {
 		case <-ticker.C:
 			dealClientData()
+		}
+	}
+}
+
+func dealLeakTasks() {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			detectAndDelLeakedTunnelAndHost(false)
 		}
 	}
 }
@@ -327,6 +340,7 @@ func DelTunnelAndHostByClientId(clientId int, justDelNoStore bool) {
 	})
 	for _, id := range ids {
 		DelTask(id)
+		logs.Debug("task %d deleted, client id %d", id, clientId)
 	}
 	ids = ids[:0]
 	file.GetDb().JsonDb.Hosts.Range(func(key, value interface{}) bool {
@@ -340,6 +354,43 @@ func DelTunnelAndHostByClientId(clientId int, justDelNoStore bool) {
 		return true
 	})
 	for _, id := range ids {
+		file.GetDb().DelHost(id)
+		logs.Debug("host %d deleted, client id %d", id, clientId)
+	}
+}
+
+//delete all host and tasks by client id
+func detectAndDelLeakedTunnelAndHost(justDelNoStore bool) {
+	var ids []int
+	file.GetDb().JsonDb.Tasks.Range(func(key, value interface{}) bool {
+		v := value.(*file.Tunnel)
+		if justDelNoStore && !v.NoStore {
+			return true
+		}
+		_, ok := file.GetDb().JsonDb.Clients.Load(v.Client.Id)
+		if !ok {
+			ids = append(ids, v.Id)
+		}
+		return true
+	})
+	for _, id := range ids {
+		logs.Debug("Found Leaked Task %d", id)
+		DelTask(id)
+	}
+	ids = ids[:0]
+	file.GetDb().JsonDb.Hosts.Range(func(key, value interface{}) bool {
+		v := value.(*file.Host)
+		if justDelNoStore && !v.NoStore {
+			return true
+		}
+		_, ok := file.GetDb().JsonDb.Clients.Load(v.Client.Id)
+		if !ok {
+			ids = append(ids, v.Id)
+		}
+		return true
+	})
+	for _, id := range ids {
+		logs.Debug("Found Leaked Host %d", id)
 		file.GetDb().DelHost(id)
 	}
 }

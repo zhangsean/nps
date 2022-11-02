@@ -221,15 +221,20 @@ func (s *Bridge) cliProcess(c *conn.Conn) {
 }
 
 func (s *Bridge) DelClient(id int) {
+	logs.Debug("DelClient: try delete client %d", id)
 	if v, ok := s.Client.Load(id); ok {
 		if v.(*Client).signal != nil {
 			v.(*Client).signal.Close()
 		}
 		s.Client.Delete(id)
+		logs.Debug("DelClient: client deleted: %d", id)
 		if file.GetDb().IsPubClient(id) {
 			return
 		}
 		s.CloseClient <- id
+		logs.Debug("DelClient: client closed: %d", id)
+	} else {
+		logs.Debug("DelClient: client not found %d", id)
 	}
 }
 

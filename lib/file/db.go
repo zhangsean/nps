@@ -3,6 +3,7 @@ package file
 import (
 	"errors"
 	"fmt"
+	"github.com/astaxie/beego/logs"
 	"net/http"
 	"sort"
 	"strings"
@@ -105,12 +106,14 @@ func (s *DbUtils) NewTask(t *Tunnel) (err error) {
 	}
 	t.Flow = new(Flow)
 	s.JsonDb.Tasks.Store(t.Id, t)
+	logs.Debug("task added: %d", t.Id)
 	s.JsonDb.StoreTasksToJsonFile()
 	return
 }
 
 func (s *DbUtils) UpdateTask(t *Tunnel) error {
 	s.JsonDb.Tasks.Store(t.Id, t)
+	logs.Debug("task updated: %d", t.Id)
 	s.JsonDb.StoreTasksToJsonFile()
 	return nil
 }
@@ -170,6 +173,7 @@ func (s *DbUtils) NewHost(t *Host) error {
 	}
 	t.Flow = new(Flow)
 	s.JsonDb.Hosts.Store(t.Id, t)
+	logs.Debug("host added: %d", t.Id)
 	s.JsonDb.StoreHostToJsonFile()
 	return nil
 }
