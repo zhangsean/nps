@@ -138,6 +138,10 @@ function langreply(langstr) {
     return langobj
 }
 
+function goback() {
+	history.back();
+}
+
 function submitform(action, url, postdata) {
     postsubmit = false;
     switch (action) {

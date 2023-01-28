@@ -8,7 +8,7 @@
                     <div class="form-group">
                         <label class="col-sm-2 control-label font-bold" langtag="word-scheme"></label>
                         <div class="col-sm-10">
-                            <span class="help-block m-b-none font-bold" langtag="word-usecase"></span>: 
+                            <span class="help-block m-b-none font-bold" langtag="word-usecase"></span>:
                             <span id="usecase">
                                 <span id="casetcp" langtag="info-casetcp"></span>
                                 <span id="caseudp" langtag="info-caseudp"></span>
@@ -102,7 +102,9 @@
                         <div class="col-sm-4 col-sm-offset-2">
                             <button class="btn btn-success" type="button" onclick="submitform('edit', '{{.web_base_url}}/index/edit', $('form').serializeArray())">
                                 <i class="fa fa-fw fa-lg fa-check-circle"></i> <span langtag="word-save"></span>
-                                
+                            </button>
+                            <button class="btn btn-light" type="button" onclick="goback()">
+                                <i class="fa fa-fw fa-lg fa-window-close"></i> <span langtag="word-cancel"></span>
                             </button>
                         </div>
                     </div>

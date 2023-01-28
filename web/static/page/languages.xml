@@ -129,6 +129,10 @@
 		<zh-CN>新增</zh-CN>
 		<en-US>Add</en-US>
 	</lang>
+	<lang id="word-cancel">
+		<zh-CN>取消</zh-CN>
+		<en-US>Cancel</en-US>
+	</lang>
 	<lang id="word-admin">
 		<zh-CN>管理员</zh-CN>
 		<en-US>Admin</en-US>

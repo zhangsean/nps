@@ -1603,8 +1603,16 @@ button:focus {
 .btn-success:focus,
 .btn-success.focus {
   color: #fff;
-  background-color: #1a7bb9;
-  border-color: #1a7bb9;
+  background-color: #349cdd;
+  border-color: #349cdd;
+}
+.btn-light {
+  color: #212529;
+  background-color: #d2d2d3;
+  border-color: #d2d2d3;
+}
+.btn-light, .btn-light:hover {
+  box-shadow: 0 2px 2px 0 rgb(248 249 250 / 14%), 0 3px 1px -2px rgb(248 249 250 / 20%), 0 1px 5px 0 rgb(248 249 250 / 12%);
 }
 .btn-success.disabled,
 .btn-success:disabled {
