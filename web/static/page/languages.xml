@@ -308,8 +308,8 @@
 		<en-US>Local path</en-US>
 	</lang>
 	<lang id="word-location">
-		<zh-CN>位置</zh-CN>
-		<en-US>Location</en-US>
+		<zh-CN>路径</zh-CN>
+		<en-US>Path</en-US>
 	</lang>
 	<lang id="word-login">
 		<zh-CN>登录</zh-CN>
