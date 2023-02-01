@@ -22,7 +22,7 @@ var (
 	once sync.Once
 )
 
-//init csv from file
+// init csv from file
 func GetDb() *DbUtils {
 	once.Do(func() {
 		jsonDb := NewJsonDb(common.GetRunPath())
@@ -121,7 +121,7 @@ func (s *DbUtils) DelTask(id int) error {
 	return nil
 }
 
-//md5 password
+// md5 password
 func (s *DbUtils) GetTaskByMd5Password(p string) (t *Tunnel) {
 	s.JsonDb.Tasks.Range(func(key, value interface{}) bool {
 		if crypt.Md5(value.(*Tunnel).Password) == p {
@@ -181,7 +181,8 @@ func (s *DbUtils) GetHost(start, length int, id int, search string) ([]*Host, in
 	for _, key := range keys {
 		if value, ok := s.JsonDb.Hosts.Load(key); ok {
 			v := value.(*Host)
-			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || strings.Contains(v.Host, search) || strings.Contains(v.Remark, search)) {
+			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || strings.Contains(v.Host, search) || strings.Contains(v.Remark, search) ||
+				strings.Contains(v.Target.TargetStr, search)) {
 				continue
 			}
 			if id == 0 || v.Client.Id == id {
@@ -315,7 +316,7 @@ func (s *DbUtils) GetHostById(id int) (h *Host, err error) {
 	return
 }
 
-//get key by host from x
+// get key by host from x
 func (s *DbUtils) GetInfoByHost(host string, r *http.Request) (h *Host, err error) {
 	var hosts []*Host
 	//Handling Ported Access
