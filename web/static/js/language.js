@@ -144,6 +144,9 @@ function goback() {
 
 function submitform(action, url, postdata) {
     postsubmit = false;
+	$.each(postdata, function(i, v){
+		v['value'] = v['value'].trim();
+	});
     switch (action) {
         case 'start':
         case 'stop':
