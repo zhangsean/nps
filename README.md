@@ -5,12 +5,12 @@
 ![Release](https://github.com/ehang-io/nps/workflows/Release/badge.svg)
 ![GitHub All Releases](https://img.shields.io/github/downloads/ehang-io/nps/total)
 
-[README](https://github.com/ehang-io/nps/blob/master/README.md)|[中文文档](https://github.com/ehang-io/nps/blob/master/README_zh.md)
+[README](https://github.com/zhangsean/nps/blob/master/README.md)|[中文文档](https://github.com/zhangsean/nps/blob/master/README_zh.md)
 
 NPS is a lightweight, high-performance, powerful **intranet penetration** proxy server, with a powerful web management terminal.
 
 
-![image](https://github.com/ehang-io/nps/blob/master/image/web.png?raw=true)
+![image](https://github.com/zhangsean/nps/blob/master/image/web.png?raw=true)
 
 ## Feature
 
@@ -30,7 +30,7 @@ NPS is a lightweight, high-performance, powerful **intranet penetration** proxy 
 
 ### Installation
 
-> [releases](https://github.com/ehang-io/nps/releases)
+> [releases](https://github.com/zhangsean/nps/releases)
 
 Download the corresponding system version, the server and client are separate.
 
