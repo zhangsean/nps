@@ -84,11 +84,11 @@
             },
             {
                 field: 'Id',//域值
-                title: '<span langtag="word-clientid"></span>',//标题
+                title: '<span langtag="word-client"></span>',//标题
                 halign: 'center',
                 visible: true,//false表示不显示
                 formatter: function (value, row, index) {
-                    return row.Client.Id
+                    return '(' + row.Client.Id + ') ' + row.Client.Remark
                 }
             },
             {
