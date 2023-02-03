@@ -292,6 +292,7 @@ func dealClientData() {
 		} else {
 			v.IsConnect = false
 		}
+		file.GetDb().JsonDb.StoreClientsToJsonFile()
 		v.Flow.InletFlow = 0
 		v.Flow.ExportFlow = 0
 		file.GetDb().JsonDb.Hosts.Range(func(key, value interface{}) bool {
