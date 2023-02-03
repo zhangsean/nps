@@ -213,9 +213,17 @@
 		<zh-CN>连接数 (已建立)</zh-CN>
 		<en-US>Connections (establish)</en-US>
 	</lang>
-	<lang id="word-connect">
-		<zh-CN>连接</zh-CN>
-		<en-US>Connect</en-US>
+	<lang id="word-connect-status">
+		<zh-CN>连接状态</zh-CN>
+		<en-US>Connect Status</en-US>
+	</lang>
+	<lang id="word-not-connected">
+		<zh-CN>未连接</zh-CN>
+		<en-US>Not connected</en-US>
+	</lang>
+	<lang id="word-minute">
+		<zh-CN>分钟</zh-CN>
+		<en-US>min</en-US>
 	</lang>
 	<lang id="word-copyright">
 		<zh-CN>版权所有</zh-CN>

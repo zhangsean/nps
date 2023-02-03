@@ -193,3 +193,30 @@ function changeunit(limit) {
     }
     return size;
 }
+
+function getOfflineStatus(lastConnTime) {
+	if (lastConnTime === 0) {
+		return '<span class="badge badge-badge" langtag="word-not-connected"></span>'
+	}
+	let offMinute = parseInt((Date.parse(new Date())/1000 - lastConnTime)/60);
+	let color = '';
+	if (offMinute >= 10) {
+		color = 'red'
+	}
+	return '<span class="badge badge-badge" langtag="word-offline"></span><span style="color:' + color + '" title="' + timeString(lastConnTime) + '"> ' + offMinute + ' <span langtag="word-minute"></span></span>'
+}
+
+function timeString(time) {
+    let dt = new Date(time * 1000);
+    return dt.getFullYear() + "-" + intFmt(dt.getMonth() + 1) + "-" + intFmt(dt.getDate()) + " " +
+		intFmt(dt.getHours()) + ":" + intFmt(dt.getMinutes()) + ":" + intFmt(dt.getSeconds());
+}
+
+function intFmt(n, len) {
+	len = len || 2;
+	let str = n + '';
+	for (let i = str.length; i < len; i++) {
+		str = '0' + str;
+	}
+	return str
+}

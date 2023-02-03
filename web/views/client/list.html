@@ -156,29 +156,15 @@
             },
             {
                 field: 'IsConnect',//域值
-                title: '<span langtag="word-connect"></span>',//内容
+                title: '<span langtag="word-connect-status"></span>',//内容
                 align: 'center',
                 halign: 'center',
                 visible: true,//false表示不显示
                 formatter: function (value, row, index) {
                     if (value) {
                         return '<span class="badge badge-primary" langtag="word-online"></span>'
-                    } else {
-                        if (row.LastConnectTime === 0) {
-                            return '<span class="badge badge-primary">从未连接</span>'
-                        }
-                        // 在列表页显示存活或者长期离线提示
-                        let now = Date.parse(new Date())/1000;
-                        let offMinute = parseInt((now - row.LastConnectTime)/60)
-                        let msg
-
-                        if (offMinute < 10) {
-                            msg = offMinute +'分钟'
-                        } else {
-                            msg = '<span style=color:red>' + offMinute +'分钟</span>'
-                        }
-
-                        return '<span class="badge badge-badge" langtag="word-offline"></span> ' + msg
+                    } else { // 在列表页显示存活或者长期离线提示
+                        return getOfflineStatus(row.LastConnectTime)
                     }
                 }
             },
