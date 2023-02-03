@@ -1,5 +1,4 @@
 #/bash/sh
-export VERSION=0.26.12
 export GOPROXY=direct
 
 sudo apt-get update
@@ -146,6 +145,8 @@ tar -czvf windows_amd64_server.tar.gz conf/nps.conf conf/tasks.json conf/clients
 
 CGO_ENABLED=0 GOOS=windows GOARCH=386 go build -ldflags "-s -w -extldflags -static -extldflags -static" ./cmd/nps/nps.go
 tar -czvf windows_386_server.tar.gz conf/nps.conf conf/tasks.json conf/clients.json conf/hosts.json conf/server.key  conf/server.pem web/views web/static nps.exe
+
+VERSION=`sed -n '/VERSION/s/.*"\(.*\)"/\1/p' lib/version/version.go`
 
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
