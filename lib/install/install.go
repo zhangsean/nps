@@ -1,11 +1,9 @@
 package install
 
 import (
-	"ehang.io/nps/lib/common"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/c4milo/unpackit"
 	"io"
 	"io/ioutil"
 	"log"
@@ -14,6 +12,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"ehang.io/nps/lib/common"
+	"github.com/c4milo/unpackit"
 )
 
 // Keep it in sync with the template from service_sysv_linux.go file
@@ -112,7 +113,7 @@ exit 0
 const SystemdScript = `[Unit]
 Description={{.Description}}
 ConditionFileIsExecutable={{.Path|cmdEscape}}
-{{range $i, $dep := .Dependencies}} 
+{{range $i, $dep := .Dependencies}}
 {{$dep}} {{end}}
 [Service]
 LimitNOFILE=65536
@@ -174,7 +175,8 @@ func downloadLatest(bin string) string {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	destPath, err := unpackit.Unpack(resp.Body, "")
+	destPath := "."
+	err = unpackit.Unpack(resp.Body, destPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -309,7 +311,7 @@ func CopyDir(srcPath string, destPath string) error {
 	return err
 }
 
-//生成目录并拷贝文件
+// 生成目录并拷贝文件
 func copyFile(src, dest string) (w int64, err error) {
 	srcFile, err := os.Open(src)
 	if err != nil {
@@ -344,7 +346,7 @@ func copyFile(src, dest string) (w int64, err error) {
 	return io.Copy(dstFile, srcFile)
 }
 
-//检测文件夹路径时候存在
+// 检测文件夹路径时候存在
 func pathExists(path string) (bool, error) {
 	_, err := os.Stat(path)
 	if err == nil {
