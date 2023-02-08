@@ -4,11 +4,12 @@ on:
   release:
     types: [published]
     branches: [ master ]
+  watch:
+    types: [started]
+    if: github.event.repository.owner.id == github.event.sender.id
 
 jobs:
-
   build_assets:
-    
     runs-on: ubuntu-latest
     steps:
 
