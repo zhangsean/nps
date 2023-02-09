@@ -7,6 +7,9 @@ on:
   watch:
     types: [started]
     if: github.event.repository.owner.id == github.event.sender.id
+  push:
+    paths:
+    - .github/workflows/release.yml
 
 jobs:
   build_assets:
