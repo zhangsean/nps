@@ -106,7 +106,7 @@ jobs:
         git clone https://github.com/cnlh/spksrc.git ~/spksrc
         mkdir ~/spksrc/nps && cp -rf ./* ~/spksrc/nps/
         docker run -id --name spksrc --env VERSION=${{ env.RELEASE_VERSION }} -e GOPROXY=direct -v ~/spksrc:/spksrc synocommunity/spksrc /bin/bash
-        docker exec spksrc /bin/bash -c 'cd /spksrc && sed -i s/1.15.6/1.19.5/g native/go/Makefile && make setup && cd /spksrc/spk/npc && make'
+        docker exec spksrc /bin/bash -c 'cd /spksrc && sed -i s/1.15.6/1.19.5/g native/go/Makefile && echo "go1.19.5.src.tar.gz SHA256 8e486e8e85a281fc5ce3f0bedc5b9d2dbf6276d7db0b25d3ec034f313da0375f" > native/go/digests && make setup && cd /spksrc/spk/npc && make'
         cp ~/spksrc/packages/npc_noarch-all_${{ env.RELEASE_VERSION }}-1.spk ./npc_syno.spk
     - name: Upload
       uses: softprops/action-gh-release@v1
