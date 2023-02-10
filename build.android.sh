@@ -1,7 +1,10 @@
 #/bin/bash
 
+wget https://go.dev/dl/go1.19.5.linux-amd64.tar.gz
+tar zxf go1.19.5.linux-amd64.tar.gz -C /usr/local/
+go version
 cd /go
-apt-get install libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev -y
+apt-get install -y libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev
 go get -u fyne.io/fyne/v2/cmd/fyne fyne.io/fyne/v2
 #mkdir -p /go/src/fyne.io
 #cd src/fyne.io
