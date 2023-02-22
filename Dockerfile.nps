@@ -9,4 +9,5 @@ FROM scratch
 COPY --from=builder /go/src/ehang.io/nps/nps /
 COPY --from=builder /go/src/ehang.io/nps/web /web
 VOLUME /conf
+EXPOSE 80 443 8080 8024
 CMD ["/nps"]
