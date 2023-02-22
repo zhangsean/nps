@@ -193,6 +193,10 @@
                 visible: true,//false表示不显示
                 formatter: function (value, row, index) {
                     btn_group = '<div class="btn-group">'
+                    btn_group += '<a  href="{{.web_base_url}}/index/edit?id=' + row.Id
+                    btn_group += '" class="btn btn-outline btn-success"><i class="fa fa-edit"></i></a>'
+                    btn_group += '<a  href="{{.web_base_url}}/index/add?id=' + row.Id
+                    btn_group += '" class="btn btn-outline btn-primary"><i class="fa fa-copy"></i></a>'
                     if (row.Status) {
                         btn_group += "<a onclick=\"submitform('stop', '{{.web_base_url}}/index/stop', {'id':" + row.Id
                         btn_group += '})" class="btn btn-outline btn-warning"><i class="fa fa-pause"></i></a>'
@@ -202,8 +206,7 @@
                     }
                     btn_group += "<a onclick=\"submitform('delete', '{{.web_base_url}}/index/del', {'id':" + row.Id
                     btn_group += '})" class="btn btn-outline btn-danger"><i class="fa fa-trash"></i></a>'
-                    btn_group += '<a  href="{{.web_base_url}}/index/edit?id=' + row.Id
-                    btn_group += '" class="btn btn-outline btn-success"><i class="fa fa-edit"></i></a></div>'
+                    btn_group += '</div>'
                     return btn_group
                 }
             }

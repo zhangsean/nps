@@ -1,7 +1,7 @@
 <div class="row tile">
     <div class="col-md-12 col-md-auto">
         <div class="ibox float-e-margins">
-            <h3 class="ibox-title" langtag="page-edit"></h3>
+            <h3 class="ibox-title" langtag="page-{{if eq 0 .t.Id}}clone{{else}}edit{{end}}"></h3>
             <div class="ibox-content">
                 <form class="form-horizontal">
                     <input type="hidden" name="id" value="{{.t.Id}}">
@@ -100,7 +100,7 @@
                     <div class="hr-line-dashed"></div>
                     <div class="form-group">
                         <div class="col-sm-4 col-sm-offset-2">
-                            <button class="btn btn-success" type="button" onclick="submitform('edit', '{{.web_base_url}}/index/edit', $('form').serializeArray())">
+                            <button class="btn btn-success" type="button" onclick="submitform('{{if eq 0 .t.Id}}add{{else}}edit{{end}}', '{{.web_base_url}}/index/{{if eq 0 .t.Id}}add{{else}}edit{{end}}', $('form').serializeArray())">
                                 <i class="fa fa-fw fa-lg fa-check-circle"></i> <span langtag="word-save"></span>
                             </button>
                             <button class="btn btn-light" type="button" onclick="goback()">

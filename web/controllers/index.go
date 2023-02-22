@@ -91,9 +91,18 @@ func (s *IndexController) GetTunnel() {
 func (s *IndexController) Add() {
 	if s.Ctx.Request.Method == "GET" {
 		s.Data["type"] = s.getEscapeString("type")
-		s.Data["client_id"] = s.getEscapeString("client_id")
-		s.SetInfo("add tunnel")
-		s.display()
+		id := s.GetIntNoErr("id")
+		if t, err := file.GetDb().GetTask(id); err == nil {
+			newTunnel := deepcopy.Copy(t).(*file.Tunnel)
+			newTunnel.Id = 0
+			s.Data["t"] = newTunnel
+			s.SetInfo("edit tunnel")
+			s.display("index/edit")
+		} else {
+			s.Data["client_id"] = s.getEscapeString("client_id")
+			s.SetInfo("add tunnel")
+			s.display()
+		}
 	} else {
 		t := &file.Tunnel{
 			Port:     s.GetIntNoErr("port"),

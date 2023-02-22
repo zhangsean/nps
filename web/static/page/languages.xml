@@ -124,7 +124,10 @@
 		<zh-CN>编辑</zh-CN>
 		<en-US>Edit</en-US>
 	</lang>
-
+	<lang id="page-clone">
+		<zh-CN>克隆</zh-CN>
+		<en-US>Clone</en-US>
+	</lang>
 	<lang id="word-address">
 		<zh-CN>客户端地址</zh-CN>
 		<en-US>Client address</en-US>
