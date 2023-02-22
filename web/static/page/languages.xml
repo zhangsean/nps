@@ -80,6 +80,10 @@
 		<zh-CN>编辑域名</zh-CN>
 		<en-US>Edit host</en-US>
 	</lang>
+	<lang id="page-hostclone">
+		<zh-CN>克隆域名</zh-CN>
+		<en-US>Clone host</en-US>
+	</lang>
 	<lang id="page-listclientid">
 		<zh-CN>隧道列表 - 客户端 ID: </zh-CN>
 		<en-US>Tunnels list - Client ID: </en-US>

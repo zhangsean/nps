@@ -2,11 +2,13 @@ package controllers
 
 import (
 	"strings"
+
 	"ehang.io/nps/lib/file"
 	"ehang.io/nps/server"
 	"ehang.io/nps/server/tool"
 
 	"github.com/astaxie/beego"
+	"github.com/mohae/deepcopy"
 )
 
 type IndexController struct {
@@ -94,11 +96,11 @@ func (s *IndexController) Add() {
 		s.display()
 	} else {
 		t := &file.Tunnel{
-			Port:      s.GetIntNoErr("port"),
-			ServerIp:  s.getEscapeString("server_ip"),
-			Mode:      s.getEscapeString("type"),
-			Target:    &file.Target{TargetStr: strings.ReplaceAll(s.getEscapeString("target"), "\r\n", "\n"),
-									LocalProxy: s.GetBoolNoErr("local_proxy")},
+			Port:     s.GetIntNoErr("port"),
+			ServerIp: s.getEscapeString("server_ip"),
+			Mode:     s.getEscapeString("type"),
+			Target: &file.Target{TargetStr: strings.ReplaceAll(s.getEscapeString("target"), "\r\n", "\n"),
+				LocalProxy: s.GetBoolNoErr("local_proxy")},
 			Id:        int(file.GetDb().JsonDb.GetTaskId()),
 			Status:    true,
 			Remark:    s.getEscapeString("remark"),
@@ -245,16 +247,25 @@ func (s *IndexController) DelHost() {
 
 func (s *IndexController) AddHost() {
 	if s.Ctx.Request.Method == "GET" {
-		s.Data["client_id"] = s.getEscapeString("client_id")
 		s.Data["menu"] = "host"
-		s.SetInfo("add host")
-		s.display("index/hadd")
+		id := s.GetIntNoErr("id")
+		if h, err := file.GetDb().GetHostById(id); err == nil {
+			newHost := deepcopy.Copy(h).(*file.Host)
+			newHost.Id = 0
+			s.Data["h"] = newHost
+			s.SetInfo("Clone host")
+			s.display("index/hedit")
+		} else {
+			s.Data["client_id"] = s.getEscapeString("client_id")
+			s.SetInfo("add host")
+			s.display("index/hadd")
+		}
 	} else {
 		h := &file.Host{
-			Id:           int(file.GetDb().JsonDb.GetHostId()),
-			Host:         s.getEscapeString("host"),
-			Target:       &file.Target{TargetStr: strings.ReplaceAll(s.getEscapeString("target"), "\r\n", "\n"),
-									   LocalProxy: s.GetBoolNoErr("local_proxy")},
+			Id:   int(file.GetDb().JsonDb.GetHostId()),
+			Host: s.getEscapeString("host"),
+			Target: &file.Target{TargetStr: strings.ReplaceAll(s.getEscapeString("target"), "\r\n", "\n"),
+				LocalProxy: s.GetBoolNoErr("local_proxy")},
 			HeaderChange: s.getEscapeString("header"),
 			HostChange:   s.getEscapeString("hostchange"),
 			Remark:       s.getEscapeString("remark"),
