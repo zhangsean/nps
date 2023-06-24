@@ -35,8 +35,7 @@
 </div>
 
 <script>
-    name = '{{.name}}:'.replace(/\s*/g,"")
-    $('#langtag').attr('langtag','page-list' + name.replace(/:.*/,"")).next().text(name.split(":")[1])
+    $('#langtag').attr('langtag','page-list{{.name}}').next().html('<a title="跳转到域名列表" href="hostlist?client_id={{.client_id}}">{{.client_id}}</a>');
 
     /*bootstrap table*/
     $('#table').bootstrapTable({
@@ -104,7 +103,7 @@
                 halign: 'center',
                 visible: true,//false表示不显示
                 formatter: function (value, row, index) {
-                    return '(' + row.Client.Id + ') ' + row.Client.Remark
+                    return '(<a title="跳转到域名列表" href="hostlist?client_id=' + row.Client.Id + '">' + row.Client.Id + '</a>) ' + row.Client.Remark
                 }
             },
             {

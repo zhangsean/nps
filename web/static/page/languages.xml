@@ -84,6 +84,10 @@
 		<zh-CN>克隆域名</zh-CN>
 		<en-US>Clone host</en-US>
 	</lang>
+	<lang id="page-host-clientid">
+		<zh-CN>域名列表 - 客户端 ID: </zh-CN>
+		<en-US>Host list - Client ID: </en-US>
+	</lang>
 	<lang id="page-listclientid">
 		<zh-CN>隧道列表 - 客户端 ID: </zh-CN>
 		<en-US>Tunnels list - Client ID: </en-US>

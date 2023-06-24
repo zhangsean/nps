@@ -4,7 +4,7 @@
         <div class="col-lg-12">
             <div class="ibox float-e-margins">
                 <div class="ibox-title">
-                    <h5 langtag="page-hostlist"></h5>
+                    <h5><span id="langspan" langtag="page-hostlist"></span><span></span></h5>
 
                     <div class="ibox-tools">
                         <a class="collapse-link">
@@ -36,6 +36,10 @@
 </div>
 
 <script>
+    cid = '{{.client_id}}';
+    if (cid) {
+        $('#langspan').attr('langtag','page-host-clientid').next().html('<a title="跳转到隧道列表" href="all?client_id=' + cid + '">' + cid + '</a>');
+    }
     /*bootstrap table*/
     $('#table').bootstrapTable({
         toolbar: "#toolbar",
@@ -88,7 +92,7 @@
                 halign: 'center',
                 visible: true,//false表示不显示
                 formatter: function (value, row, index) {
-                    return '(' + row.Client.Id + ') ' + row.Client.Remark
+                    return '(<a title="跳转到隧道列表" href="all?client_id=' + row.Client.Id + '">' + row.Client.Id + '</a>) ' + row.Client.Remark
                 }
             },
             {

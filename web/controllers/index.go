@@ -45,12 +45,12 @@ func (s *IndexController) Socks5() {
 }
 
 func (s *IndexController) Http() {
-	s.SetInfo("http proxy")
+	s.SetInfo("httpproxy")
 	s.SetType("httpProxy")
 	s.display("index/list")
 }
 func (s *IndexController) File() {
-	s.SetInfo("file server")
+	s.SetInfo("fileserver")
 	s.SetType("file")
 	s.display("index/list")
 }
@@ -76,7 +76,7 @@ func (s *IndexController) All() {
 	s.Data["menu"] = "client"
 	clientId := s.getEscapeString("client_id")
 	s.Data["client_id"] = clientId
-	s.SetInfo("client id:" + clientId)
+	s.SetInfo("clientid")
 	s.display("index/list")
 }
 
