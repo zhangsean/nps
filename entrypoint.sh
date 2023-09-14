@@ -1,9 +1,9 @@
 #!/bin/sh
 set -e
 
-if [ -z "$1" ]; then
-    [ ! -f /conf/nps.conf ] && cp -r /conf-tpl /conf
-    /nps
-else
+if [ "$1" == "sh" ]; then
     exec "$@"
+else
+    [ ! -f /conf/nps.conf ] && cp -r /conf-tpl /conf
+    /nps $@
 fi
