@@ -6,7 +6,9 @@ RUN CGO_ENABLED=0 go build -ldflags="-w -s -extldflags -static" ./cmd/nps/nps.go
 
 FROM scratch
 COPY --from=builder /go/src/ehang.io/nps/nps /
+COPY --from=builder /go/src/ehang.io/nps/conf /conf-tpl
 COPY --from=builder /go/src/ehang.io/nps/web /web
+COPY --from=builder /go/src/ehang.io/nps/entrypoint.sh /
 VOLUME /conf
 EXPOSE 80 443 8080 8024
-CMD ["/nps"]
+ENTRYPOINT [ "/entrypoint.sh"]
