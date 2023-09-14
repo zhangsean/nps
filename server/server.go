@@ -254,7 +254,7 @@ func GetTunnel(start, length int, typeVal string, clientId int, search string) (
 				continue
 			}
 			cnt++
-			if _, ok := Bridge.Client.Load(v.Client.Id); ok {
+			if _, ok := Bridge.Client.Load(v.Client.Id); ok || v.Target.LocalProxy {
 				v.Client.IsConnect = true
 			} else {
 				v.Client.IsConnect = false
@@ -289,6 +289,13 @@ func dealClientData() {
 			v.IsConnect = true
 			v.Version = vv.(*bridge.Client).Version
 			v.LastConnectTime = time.Now().Unix() // 记录客户端存活时间
+		} else if v.Id == 1 {
+			if allowLocalProxy, _ := beego.AppConfig.Bool("allow_local_proxy"); allowLocalProxy {
+				v.IsConnect = true
+				v.Version = version.VERSION
+			} else {
+				v.IsConnect = false
+			}
 		} else {
 			v.IsConnect = false
 		}

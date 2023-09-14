@@ -3,15 +3,18 @@ package file
 import (
 	"encoding/json"
 	"errors"
-	"github.com/astaxie/beego/logs"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 
+	"github.com/astaxie/beego"
+	"github.com/astaxie/beego/logs"
+
 	"ehang.io/nps/lib/common"
 	"ehang.io/nps/lib/rate"
+	"ehang.io/nps/lib/version"
 )
 
 func NewJsonDb(runPath string) *JsonDb {
@@ -72,6 +75,21 @@ func (s *JsonDb) LoadClientFromJsonFile() {
 			s.ClientIncreaseId = int32(post.Id)
 		}
 	})
+	if allowLocalProxy, _ := beego.AppConfig.Bool("allow_local_proxy"); allowLocalProxy {
+		if _, err := s.GetClient(1); err != nil {
+			local := new(Client)
+			local.Id = 1
+			local.Remark = "Local Proxy"
+			local.Addr = "127.0.0.1"
+			local.Cnf = new(Config)
+			local.Flow = new(Flow)
+			local.Rate = new(rate.Rate)
+			local.Status = true
+			local.Version = version.VERSION
+			local.VerifyKey = "localproxy"
+			s.Clients.Store(local.Id, local)
+		}
+	}
 }
 
 func (s *JsonDb) LoadHostFromJsonFile() {
