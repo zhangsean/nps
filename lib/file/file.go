@@ -58,6 +58,24 @@ func (s *JsonDb) LoadTaskFromJsonFile() {
 }
 
 func (s *JsonDb) LoadClientFromJsonFile() {
+	if allowLocalProxy, _ := beego.AppConfig.Bool("allow_local_proxy"); allowLocalProxy {
+		if _, err := s.GetClient(1); err != nil {
+			local := new(Client)
+			local.Id = 1
+			local.Remark = "Local Proxy"
+			local.Addr = "127.0.0.1"
+			local.Cnf = new(Config)
+			local.Flow = new(Flow)
+			local.Rate = new(rate.Rate)
+			local.Status = true
+			local.ConfigConnAllow = true
+			local.Version = version.VERSION
+			local.VerifyKey = "localproxy"
+			s.Clients.Store(local.Id, local)
+			s.ClientIncreaseId = 1
+			logs.Notice("Auto create local proxy client, please restart nps.")
+		}
+	}
 	loadSyncMapFromFile(s.ClientFilePath, func(v string) {
 		post := new(Client)
 		if json.Unmarshal([]byte(v), &post) != nil {
@@ -75,21 +93,6 @@ func (s *JsonDb) LoadClientFromJsonFile() {
 			s.ClientIncreaseId = int32(post.Id)
 		}
 	})
-	if allowLocalProxy, _ := beego.AppConfig.Bool("allow_local_proxy"); allowLocalProxy {
-		if _, err := s.GetClient(1); err != nil {
-			local := new(Client)
-			local.Id = 1
-			local.Remark = "Local Proxy"
-			local.Addr = "127.0.0.1"
-			local.Cnf = new(Config)
-			local.Flow = new(Flow)
-			local.Rate = new(rate.Rate)
-			local.Status = true
-			local.Version = version.VERSION
-			local.VerifyKey = "localproxy"
-			s.Clients.Store(local.Id, local)
-		}
-	}
 }
 
 func (s *JsonDb) LoadHostFromJsonFile() {
