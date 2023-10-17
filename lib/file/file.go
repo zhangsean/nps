@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/astaxie/beego"
 	"github.com/astaxie/beego/logs"
@@ -71,6 +72,7 @@ func (s *JsonDb) LoadClientFromJsonFile() {
 			local.ConfigConnAllow = true
 			local.Version = version.VERSION
 			local.VerifyKey = "localproxy"
+			local.LastConnectTime = time.Now().Local().Unix()
 			s.Clients.Store(local.Id, local)
 			s.ClientIncreaseId = 1
 			logs.Notice("Auto create local proxy client, please restart nps.")

@@ -162,7 +162,7 @@
                 visible: true,//false表示不显示
                 formatter: function (value, row, index) {
                     if (value) {
-                        return '<span class="badge badge-primary" langtag="word-online"></span>'
+                        return '<span class="badge badge-primary" title="' + timeString(row.LastConnectTime) + '" langtag="word-online"></span>'
                     } else { // 在列表页显示存活或者长期离线提示
                         return getOfflineStatus(row.LastConnectTime)
                     }
