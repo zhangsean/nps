@@ -1,11 +1,18 @@
 package controllers
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"fmt"
 	"html"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/astaxie/beego/context"
 
 	"ehang.io/nps/lib/common"
 	"ehang.io/nps/lib/crypt"
@@ -18,6 +25,42 @@ type BaseController struct {
 	beego.Controller
 	controllerName string
 	actionName     string
+}
+
+// 验证请求的签名是否正确
+func verifySignature(ctx *context.Context, signKey string) bool {
+	signatureBase64 := ctx.Request.Header.Get("X-Signature")
+	if signatureBase64 == "" {
+		return false
+	}
+	postForm := ctx.Request.PostForm
+	requestURI := ctx.Request.RequestURI
+	// 将RequestURI 和 PostForm 按照首字母升序排序，并用###间隔拼接成字符串
+	var keys []string
+	for k := range postForm {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var params []string
+	for _, k := range keys {
+		v := strings.Join(postForm[k], ",")
+		params = append(params, fmt.Sprintf("%s=%s", k, v))
+	}
+	data := []byte(requestURI + "###" + strings.Join(params, "&"))
+	bodyHash := sha256.Sum256(data)
+
+	mac := hmac.New(sha256.New, []byte(signKey))
+	mac.Write(bodyHash[:])
+	signature := mac.Sum(nil)
+
+	// 将签名进行 Base64 编码，方便比较
+	expectedSignatureBase64 := base64.StdEncoding.EncodeToString(signature)
+	if beego.AppConfig.String("runmode") == "dev" {
+		beego.BeeLogger.Debug("api request data: %s", data)
+		beego.BeeLogger.Debug("api request signatureBase64: %s expectedSignatureBase64: %s", signatureBase64, expectedSignatureBase64)
+	}
+	return signatureBase64 == expectedSignatureBase64
 }
 
 //初始化参数
@@ -34,8 +77,17 @@ func (s *BaseController) Prepare() {
 	configKey := beego.AppConfig.String("auth_key")
 	timeNowUnix := time.Now().Unix()
 	if !(md5Key != "" && (math.Abs(float64(timeNowUnix-int64(timestamp))) <= 20) && (crypt.Md5(configKey+strconv.Itoa(timestamp)) == md5Key)) {
-		if s.GetSession("auth") != true {
-			s.Redirect(beego.AppConfig.String("web_base_url")+"/login/index", 302)
+
+		//解除后台登录限制
+		sign_code := beego.AppConfig.String("api_sign_code")
+		if sign_code != "" && verifySignature(s.Ctx, sign_code) {
+			s.SetSession("isAdmin", true)
+			s.Data["isAdmin"] = true
+			s.SetSession("username", "bot-admin")
+		} else {
+			if s.GetSession("auth") != true {
+				s.Redirect(beego.AppConfig.String("web_base_url")+"/login/index", 302)
+			}
 		}
 	} else {
 		s.SetSession("isAdmin", true)
