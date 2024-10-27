@@ -7,7 +7,7 @@
 
 此版本基于 nps 0.26.10的基础上二次开发而来。
 
-***DockerHub***： [NPS](https://hub.docker.com/r/yisier1/nps) [NPC](https://hub.docker.com/r/yisier1/npc)
+***DockerHub***： [NPS](https://hub.docker.com/r/zhangsean/nps) [NPC](https://hub.docker.com/r/zhangsean/npc)
 
 # 交流群
 聊天灌水QQ群：770569342,619833483(已满)
@@ -21,11 +21,16 @@ https://natnps.com/
 
 
 # 捐赠
-![image](image/new/payCode.png)
-
+![image](image/tip_wx.png)
+![image](image/tip_zfb.png)
 
 
 ## 更新日志
+- 2024-10-27  v0.26.21
+  - **特性**：Http和TCP代理支持克隆功能，方便快捷复制代理
+  - **特性**：相同客户端的Http和TCP代理列表便捷切换
+  - **特性**：NPS默认启动一个本地代理客户端，不需要额外启动客户端，即可象 Nginx 一样配置Http和TCP代理，这个本地代理模式有配置界面还实时生效比 Nginx 更方便
+
 - 2024-06-01  v0.26.19
   - golang 版本升级到 1.22.
   - 增加自动https，自动将http 重定向（301）到 https.
