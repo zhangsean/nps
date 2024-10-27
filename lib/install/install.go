@@ -155,7 +155,7 @@ type release struct {
 
 func downloadLatest(bin string) string {
 	// get version
-	data, err := http.Get("https://api.github.com/repos/ehang-io/nps/releases/latest")
+	data, err := http.Get("https://api.github.com/repos/zhangsean/nps/releases/latest")
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -169,14 +169,14 @@ func downloadLatest(bin string) string {
 	fmt.Println("the latest version is", version)
 	filename := runtime.GOOS + "_" + runtime.GOARCH + "_" + bin + ".tar.gz"
 	// download latest package
-	downloadUrl := fmt.Sprintf("https://ehang.io/nps/releases/download/%s/%s", version, filename)
+	downloadUrl := fmt.Sprintf("https://github.com/zhangsean/nps/releases/download/%s/%s", version, filename)
 	fmt.Println("download package from ", downloadUrl)
 	resp, err := http.Get(downloadUrl)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 	destPath := "."
-	err = unpackit.Unpack(resp.Body, destPath)
+	_, err = unpackit.Unpack(resp.Body, destPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -241,6 +241,7 @@ func InstallNpc() {
 
 func InstallNps() string {
 	path := common.GetInstallPath()
+	log.Println("install path:" + path)
 	if common.FileExists(path) {
 		MkidrDirAll(path, "web/static", "web/views")
 	} else {

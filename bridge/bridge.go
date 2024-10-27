@@ -1,6 +1,8 @@
 package bridge
 
 import (
+	"crypto/tls"
+	_ "crypto/tls"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -11,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	nps_mux "ehang.io/nps-mux"
+	"ehang.io/nps/lib/nps_mux"
 
 	"ehang.io/nps/lib/common"
 	"ehang.io/nps/lib/conn"
@@ -23,6 +25,8 @@ import (
 	"github.com/astaxie/beego"
 	"github.com/astaxie/beego/logs"
 )
+
+var ServerTlsEnable bool = false
 
 type Client struct {
 	tunnel    *nps_mux.Mux
@@ -77,15 +81,37 @@ func (s *Bridge) StartTunnel() error {
 			s.cliProcess(conn.NewConn(c))
 		})
 	} else {
-		listener, err := connection.GetBridgeListener(s.tunnelType)
-		if err != nil {
-			logs.Error(err)
-			os.Exit(0)
-			return err
+
+		go func() {
+			listener, err := connection.GetBridgeListener(s.tunnelType)
+			if err != nil {
+				logs.Error(err)
+				os.Exit(0)
+				return
+			}
+			conn.Accept(listener, func(c net.Conn) {
+				s.cliProcess(conn.NewConn(c))
+			})
+		}()
+
+		// tls
+		if ServerTlsEnable {
+			go func() {
+				// 监听TLS 端口
+				tlsBridgePort := beego.AppConfig.DefaultInt("tls_bridge_port", 8025)
+
+				logs.Info("tls server start, the bridge type is %s, the tls bridge port is %d", "tcp", tlsBridgePort)
+				tlsListener, tlsErr := net.ListenTCP("tcp", &net.TCPAddr{net.ParseIP(beego.AppConfig.String("bridge_ip")), tlsBridgePort, ""})
+				if tlsErr != nil {
+					logs.Error(tlsErr)
+					os.Exit(0)
+					return
+				}
+				conn.Accept(tlsListener, func(c net.Conn) {
+					s.cliProcess(conn.NewConn(tls.Server(c, &tls.Config{Certificates: []tls.Certificate{crypt.GetCert()}})))
+				})
+			}()
 		}
-		conn.Accept(listener, func(c net.Conn) {
-			s.cliProcess(conn.NewConn(c))
-		})
 	}
 	return nil
 }
@@ -167,7 +193,13 @@ func (s *Bridge) verifySuccess(c *conn.Conn) {
 func (s *Bridge) cliProcess(c *conn.Conn) {
 	//read test flag
 	if _, err := c.GetShortContent(3); err != nil {
-		logs.Info("Client %s connect error: %s", c.Conn.RemoteAddr(), err.Error())
+		logs.Info("The client %s connect error", c.Conn.RemoteAddr(), err.Error())
+		return
+	}
+	//version check
+	if ver, err := c.GetShortLenContent(); err != nil || string(ver) != version.GetVersion() {
+		logs.Info("The client %s version %s does not match", c.Conn.RemoteAddr(), ver)
+		c.Close()
 		return
 	}
 	//version get
@@ -179,7 +211,7 @@ func (s *Bridge) cliProcess(c *conn.Conn) {
 		return
 	}
 	//version check
-	if vs, err = c.GetShortLenContent(); len(string(vs)) == 0 || version.CompareVersion(string(vs), version.GetVersion()) < 0 {
+	if len(string(vs)) == 0 || version.CompareVersion(string(vs), version.GetVersion()) < 0 {
 		logs.Error("Client %s version %s does not match server minimum compatibility version: %s", c.Conn.RemoteAddr(), string(vs), version.GetVersion())
 		c.Close()
 		return

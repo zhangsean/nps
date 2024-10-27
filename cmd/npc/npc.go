@@ -40,6 +40,7 @@ var (
 	stunAddr       = flag.String("stun_addr", "stun.stunprotocol.org:3478", "stun server address (eg:stun.stunprotocol.org:3478)")
 	ver            = flag.Bool("version", false, "show current version")
 	disconnectTime = flag.Int("disconnect_timeout", 60, "not receiving check packet times, until timeout will disconnect the client")
+	tlsEnable      = flag.Bool("tls_enable", false, "enable tls")
 )
 
 func main() {
@@ -229,15 +230,23 @@ func run() {
 	if *verifyKey == "" {
 		*verifyKey, _ = env["NPC_SERVER_VKEY"]
 	}
-	logs.Info("the version of client is %s, the core version of client is %s", version.VERSION, version.GetVersion())
 	if *verifyKey != "" && *serverAddr != "" && *configPath == "" {
-		go func() {
-			for {
-				client.NewRPClient(*serverAddr, *verifyKey, *connType, *proxyUrl, nil, *disconnectTime).Start()
-				logs.Info("Client closed! It will be reconnected in five seconds")
-				time.Sleep(time.Second * 5)
-			}
-		}()
+		client.SetTlsEnable(*tlsEnable)
+		logs.Info("the version of client is %s, the core version of client is %s,tls enable is %t", version.VERSION, version.GetVersion(), client.GetTlsEnable())
+
+		vkeys := strings.Split(*verifyKey, `,`)
+		for _, key := range vkeys {
+			key := key
+			go func() {
+				for {
+					logs.Info("start vkey:" + key)
+					client.NewRPClient(*serverAddr, key, *connType, *proxyUrl, nil, *disconnectTime).Start()
+					logs.Info("Client closed! It will be reconnected in five seconds")
+					time.Sleep(time.Second * 5)
+				}
+			}()
+		}
+
 	} else {
 		if *configPath == "" {
 			*configPath = common.GetConfigPath()

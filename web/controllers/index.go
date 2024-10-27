@@ -104,6 +104,7 @@ func (s *IndexController) Add() {
 			s.display()
 		}
 	} else {
+		id := int(file.GetDb().JsonDb.GetTaskId())
 		t := &file.Tunnel{
 			Port:     s.GetIntNoErr("port"),
 			ServerIp: s.getEscapeString("server_ip"),
@@ -118,6 +119,11 @@ func (s *IndexController) Add() {
 			StripPre:  s.getEscapeString("strip_pre"),
 			Flow:      &file.Flow{},
 		}
+
+		if t.Port <= 0 {
+			t.Port = tool.GenerateServerPort(t.Mode)
+		}
+
 		if !tool.TestServerPort(t.Port, t.Mode) {
 			s.AjaxErr("The port cannot be opened because it may has been occupied or is no longer allowed.")
 		}
@@ -134,7 +140,7 @@ func (s *IndexController) Add() {
 		if err := server.AddTask(t); err != nil {
 			s.AjaxErr(err.Error())
 		} else {
-			s.AjaxOk("add success")
+			s.AjaxOkWithId("add success", id)
 		}
 	}
 }
@@ -171,11 +177,16 @@ func (s *IndexController) Edit() {
 				t.Client = client
 			}
 			if s.GetIntNoErr("port") != t.Port {
+				t.Port = s.GetIntNoErr("port")
+
+				if t.Port <= 0 {
+					t.Port = tool.GenerateServerPort(t.Mode)
+				}
+
 				if !tool.TestServerPort(s.GetIntNoErr("port"), t.Mode) {
 					s.AjaxErr("The port cannot be opened because it may has been occupied or is no longer allowed.")
 					return
 				}
-				t.Port = s.GetIntNoErr("port")
 			}
 			t.ServerIp = s.getEscapeString("server_ip")
 			t.Mode = s.getEscapeString("type")
@@ -270,9 +281,10 @@ func (s *IndexController) AddHost() {
 			s.display("index/hadd")
 		}
 	} else {
+		id := int(file.GetDb().JsonDb.GetHostId())
 		h := &file.Host{
-			Id:   int(file.GetDb().JsonDb.GetHostId()),
-			Host: s.getEscapeString("host"),
+			Id:   	id,
+			Host: 	s.getEscapeString("host"),
 			Target: &file.Target{TargetStr: strings.ReplaceAll(s.getEscapeString("target"), "\r\n", "\n"),
 				LocalProxy: s.GetBoolNoErr("local_proxy")},
 			HeaderChange: s.getEscapeString("header"),
@@ -283,6 +295,7 @@ func (s *IndexController) AddHost() {
 			Scheme:       s.getEscapeString("scheme"),
 			KeyFilePath:  s.getEscapeString("key_file_path"),
 			CertFilePath: s.getEscapeString("cert_file_path"),
+			AutoHttps:    s.GetBoolNoErr("AutoHttps"),
 		}
 		var err error
 		if h.Client, err = file.GetDb().GetClient(s.GetIntNoErr("client_id")); err != nil {
@@ -291,7 +304,7 @@ func (s *IndexController) AddHost() {
 		if err := file.GetDb().NewHost(h); err != nil {
 			s.AjaxErr("add fail" + err.Error())
 		}
-		s.AjaxOk("add success")
+		s.AjaxOkWithId("add success", id)
 	}
 }
 
@@ -335,6 +348,7 @@ func (s *IndexController) EditHost() {
 			h.KeyFilePath = s.getEscapeString("key_file_path")
 			h.CertFilePath = s.getEscapeString("cert_file_path")
 			h.Target.LocalProxy = s.GetBoolNoErr("local_proxy")
+			h.AutoHttps = s.GetBoolNoErr("AutoHttps")
 			file.GetDb().JsonDb.StoreHostToJsonFile()
 		}
 		s.AjaxOk("modified success")

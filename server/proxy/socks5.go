@@ -142,7 +142,7 @@ func (s *Sock5ModeServer) doConnect(c net.Conn, command uint8) {
 	}
 	s.DealClient(conn.NewConn(c), s.task.Client, addr, nil, ltype, func() {
 		s.sendReply(c, succeeded)
-	}, s.task.Flow, s.task.Target.LocalProxy)
+	}, s.task.Flow, s.task.Target.LocalProxy, nil)
 	return
 }
 
@@ -344,6 +344,9 @@ func (s *Sock5ModeServer) Auth(c net.Conn) error {
 	if s.task.MultiAccount != nil {
 		// enable multi user auth
 		U = string(user)
+		if len(U) == 0 {
+		        return errors.New("验证不通过")
+		}
 		var ok bool
 		P, ok = s.task.MultiAccount.AccountMap[U]
 		if !ok {

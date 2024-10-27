@@ -73,6 +73,7 @@
                     + '<b langtag="word-compress"></b>: ' + row.Client.Cnf.Compress + '&emsp;'
                     + '<b langtag="word-basicusername"></b>: ' + row.Client.Cnf.U + '&emsp;'
                     + '<b langtag="word-basicpassword"></b>: ' + row.Client.Cnf.P + '&emsp;'
+                    + '<b langtag="word-ishttp"></b>: ' + row.IsHttp + '&emsp;'
             if (row.Mode == "p2p") {
                 return tmp + "<br/><br>"
                         + '<b langtag="word-commandaccessp2p"></b>: ' + "<code>./npc{{.win}} -server={{.ip}}:{{.p}} -vkey=" + row.Client.VerifyKey
@@ -109,6 +110,12 @@
             {
                 field: 'Remark',//域值
                 title: '<span langtag="word-remark"></span>',//标题
+                halign: 'center',
+                visible: true//false表示不显示
+            },
+            {
+                field: 'Client.VerifyKey',//域值
+                title: '<span langtag="word-verifykey"></span>',//标题
                 halign: 'center',
                 visible: true//false表示不显示
             },

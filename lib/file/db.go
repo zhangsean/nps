@@ -29,6 +29,7 @@ func GetDb() *DbUtils {
 		jsonDb.LoadClientFromJsonFile()
 		jsonDb.LoadTaskFromJsonFile()
 		jsonDb.LoadHostFromJsonFile()
+		jsonDb.LoadGlobalFromJsonFile()
 		Db = &DbUtils{JsonDb: jsonDb}
 	})
 	return Db
@@ -115,6 +116,12 @@ func (s *DbUtils) UpdateTask(t *Tunnel) error {
 	return nil
 }
 
+func (s *DbUtils) SaveGlobal(t *Glob) error {
+	s.JsonDb.Global = t
+	s.JsonDb.StoreGlobalToJsonFile()
+	return nil
+}
+
 func (s *DbUtils) DelTask(id int) error {
 	s.JsonDb.Tasks.Delete(id)
 	s.JsonDb.StoreTasksToJsonFile()
@@ -181,8 +188,7 @@ func (s *DbUtils) GetHost(start, length int, id int, search string) ([]*Host, in
 	for _, key := range keys {
 		if value, ok := s.JsonDb.Hosts.Load(key); ok {
 			v := value.(*Host)
-			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || strings.Contains(v.Host, search) || strings.Contains(v.Remark, search) ||
-				strings.Contains(v.Target.TargetStr, search)) {
+			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || strings.Contains(v.Host, search) || strings.Contains(v.Remark, search) || strings.Contains(v.Client.VerifyKey, search)) {
 				continue
 			}
 			if id == 0 || v.Client.Id == id {
@@ -287,6 +293,10 @@ func (s *DbUtils) GetClient(id int) (c *Client, err error) {
 	}
 	err = errors.New("未找到客户端")
 	return
+}
+
+func (s *DbUtils) GetGlobal() (c *Glob) {
+	return s.JsonDb.Global
 }
 
 func (s *DbUtils) GetClientIdByVkey(vkey string) (id int, err error) {

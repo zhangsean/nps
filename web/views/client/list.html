@@ -61,7 +61,7 @@
             return '<b langtag="word-maxconnections"></b>: ' + row.MaxConn + '&emsp;'
                 + '<b langtag="word-curconnections"></b>: ' + row.NowConn + '&emsp;'
                 + '<b langtag="word-flowlimit"></b>: ' + row.Flow.FlowLimit + 'm&emsp;'
-                + '<b langtag="word-ratelimit"></b>: ' + row.RateLimit + 'kb/s&emsp;'
+                + '<b langtag="word-ratelimit"></b>: ' + row.RateLimit + 'KB/s&emsp;'
                 + '<b langtag="word-maxtunnels"></b>: ' + row.MaxTunnelNum + '&emsp;<br/><br/>'
                 + '<b langtag="word-webusername"></b>: ' + row.WebUserName + '&emsp;'
                 + '<b langtag="word-webpassword"></b>: ' + row.WebPassword + '&emsp;'
@@ -70,7 +70,10 @@
                 + '<b langtag="word-crypt"></b>: <span langtag="word-' + row.Cnf.Crypt + '"></span>&emsp;'
                 + '<b langtag="word-compress"></b>: <span langtag="word-' + row.Cnf.Compress + '"></span>&emsp;'
                 + '<b langtag="word-connectbyconfig"></b>: <span langtag="word-' + row.ConfigConnAllow + '"></span>&emsp;<br/><br/>'
-                + '<b langtag="word-commandclient"></b>: ' + "<code>./npc{{.win}} -server={{.ip}}:{{.p}} -vkey=" + row.VerifyKey + " -type=" +{{.bridgeType}} +"</code>"
+                + '<b langtag="word-blackip"></b>: ' + row.BlackIpList + '&emsp;<br/><br/>'
+                + '<b langtag="word-lastonlinetime"></b>: ' + row.LastOnlineTime + '&emsp;<br/><br/>'
+                + '<b langtag="word-commandclient"></b>: ' + "<code>./npc{{.win}} -server={{.ip}}:{{.p}} -vkey=" + row.VerifyKey + " -type=" +{{.bridgeType}} +"</code><br/>"
+                + '<b langtag="word-commandclient-tls"></b>: ' + "<code>./npc{{.win}} -server={{.ip}}:{{.tls_p}} -vkey=" + row.VerifyKey + " -tls_enable=true</code>"
         },
         //表格的列
         columns: [

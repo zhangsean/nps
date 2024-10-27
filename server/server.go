@@ -72,7 +72,7 @@ func DealBridgeTask() {
 			logs.Trace("New secret connection, addr", s.Conn.Conn.RemoteAddr())
 			if t := file.GetDb().GetTaskByMd5Password(s.Password); t != nil {
 				if t.Status {
-					go proxy.NewBaseServer(Bridge, t).DealClient(s.Conn, t.Client, t.Target.TargetStr, nil, common.CONN_TCP, nil, t.Flow, t.Target.LocalProxy)
+					go proxy.NewBaseServer(Bridge, t).DealClient(s.Conn, t.Client, t.Target.TargetStr, nil, common.CONN_TCP, nil, t.Flow, t.Target.LocalProxy, nil)
 				} else {
 					s.Conn.Close()
 					logs.Trace("This key %s cannot be processed,status is close", s.Password)
@@ -173,6 +173,7 @@ func StopServer(id int) error {
 			return err
 		} else {
 			t.Status = false
+			logs.Info("close port %d,remark %s,client id %d,task id %d", t.Port, t.Remark, t.Client.Id, t.Id)
 			file.GetDb().UpdateTask(t)
 		}
 		//delete(RunList, id)
@@ -249,8 +250,7 @@ func GetTunnel(start, length int, typeVal string, clientId int, search string) (
 			if (typeVal != "" && v.Mode != typeVal || (clientId != 0 && v.Client.Id != clientId)) || (typeVal == "" && clientId != v.Client.Id) {
 				continue
 			}
-			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || v.Port == common.GetIntNoErrByStr(search) ||
-				strings.Contains(v.Password, search) || strings.Contains(v.Remark, search) || strings.Contains(v.Target.TargetStr, search)) {
+			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || v.Port == common.GetIntNoErrByStr(search) || strings.Contains(v.Password, search) || strings.Contains(v.Remark, search) || strings.Contains(v.Client.VerifyKey, search)) {
 				continue
 			}
 			cnt++
@@ -283,10 +283,13 @@ func GetClientList(start, length int, search, sort, order string, clientId int) 
 }
 
 func dealClientData() {
+	//logs.Info("dealClientData.........")
+
 	file.GetDb().JsonDb.Clients.Range(func(key, value interface{}) bool {
 		v := value.(*file.Client)
 		if vv, ok := Bridge.Client.Load(v.Id); ok {
 			v.IsConnect = true
+			v.LastOnlineTime = time.Now().Format("2006-01-02 15:04:05")
 			v.Version = vv.(*bridge.Client).Version
 			v.LastConnectTime = time.Now().Unix() // 记录客户端存活时间
 		} else if v.Id == 1 {
@@ -299,25 +302,34 @@ func dealClientData() {
 		} else {
 			v.IsConnect = false
 		}
-		file.GetDb().JsonDb.StoreClientsToJsonFile()
-		v.Flow.InletFlow = 0
-		v.Flow.ExportFlow = 0
-		file.GetDb().JsonDb.Hosts.Range(func(key, value interface{}) bool {
-			h := value.(*file.Host)
-			if h.Client.Id == v.Id {
-				v.Flow.InletFlow += h.Flow.InletFlow
-				v.Flow.ExportFlow += h.Flow.ExportFlow
-			}
-			return true
-		})
-		file.GetDb().JsonDb.Tasks.Range(func(key, value interface{}) bool {
-			t := value.(*file.Tunnel)
-			if t.Client.Id == v.Id {
-				v.Flow.InletFlow += t.Flow.InletFlow
-				v.Flow.ExportFlow += t.Flow.ExportFlow
-			}
-			return true
-		})
+		//v.Flow.InletFlow = 0
+		//v.Flow.ExportFlow = 0
+		//if len(file.GetDb().JsonDb.Hosts) == 0 {
+		//
+		//}
+		//var inflow int64 = 0
+		//var outflow int64 = 0
+		//file.GetDb().JsonDb.Hosts.Range(func(key, value interface{}) bool {
+		//	h := value.(*file.Host)
+		//	if h.Client.Id == v.Id {
+		//		inflow  += h.Flow.InletFlow
+		//		outflow += h.Flow.ExportFlow
+		//	}
+		//	return true
+		//})
+		//file.GetDb().JsonDb.Tasks.Range(func(key, value interface{}) bool {
+		//	t := value.(*file.Tunnel)
+		//	if t.Client.Id == v.Id {
+		//		inflow  += t.Flow.InletFlow
+		//		outflow += t.Flow.ExportFlow
+		//	}
+		//	return true
+		//})
+		//
+		//if inflow >0 || outflow >0{
+		//	v.Flow.InletFlow = inflow
+		//	v.Flow.ExportFlow = outflow
+		//}
 		return true
 	})
 	return
@@ -457,6 +469,7 @@ func GetDashboardData() map[string]interface{} {
 	return data
 }
 
+// 实例化流量数据到文件
 func flowSession(m time.Duration) {
 	ticker := time.NewTicker(m)
 	defer ticker.Stop()
@@ -466,6 +479,7 @@ func flowSession(m time.Duration) {
 			file.GetDb().JsonDb.StoreHostToJsonFile()
 			file.GetDb().JsonDb.StoreTasksToJsonFile()
 			file.GetDb().JsonDb.StoreClientsToJsonFile()
+			file.GetDb().JsonDb.StoreGlobalToJsonFile()
 		}
 	}
 }
