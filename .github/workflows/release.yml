@@ -16,13 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.x
-      uses: actions/setup-go@v2
+    - name: Set up Go 1.22
+      uses: actions/setup-go@v4
       with:
-        go-version: 1.19
+        go-version: 1.22
       id: go
     - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     - name: Get dependencies
       run: |
         go get -v -t -d ./...
@@ -34,11 +34,25 @@ jobs:
       run: |
         chmod +x build.assets.sh
         ./build.assets.sh
-    - name: Upload
-      uses: softprops/action-gh-release@v1
+    - name: Create GitHub Release (assets)
+      id: create_release_assets
+      uses: actions/create-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
-        files: |
+        tag_name: ${{ github.ref_name }}
+        release_name: ${{ github.ref_name }}
+        body: Release ${{ github.ref_name }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload release assets (batch)
+      if: startsWith(github.ref, 'refs/tags/')
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        UPLOAD_URL: ${{ steps.create_release_assets.outputs.upload_url }}
+      run: |
+        UPLOAD_URL="${UPLOAD_URL%\{*}"
+        files=(
           freebsd_386_client.tar.gz
           freebsd_386_server.tar.gz
           freebsd_amd64_client.tar.gz
@@ -72,8 +86,18 @@ jobs:
           windows_amd64_client.tar.gz
           windows_amd64_server.tar.gz
           npc_sdk.tar.gz
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        )
+        for f in "${files[@]}"; do
+          if [ -f "$f" ]; then
+            echo "Uploading $f"
+            curl -sSL -X POST \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Content-Type: application/gzip" \
+              --data-binary @"$f" "$UPLOAD_URL?name=$(basename "$f")"
+          else
+            echo "Warning: $f not found, skipping"
+          fi
+        done
 
   build_android:
 
@@ -81,19 +105,35 @@ jobs:
     steps:
 
     - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     - name: Build
       run: |
         chmod +x build.android.sh
         docker run --rm -i -w /app -v $(pwd):/app -e ANDROID_HOME=/usr/local/android_sdk -e GOPROXY=direct fyneio/fyne-cross:android-latest /app/build.android.sh
     - name: Upload
-      uses: softprops/action-gh-release@v1
+      id: create_release_android
+      uses: actions/create-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
-        files: |
-          android_client.apk
+        tag_name: ${{ github.ref_name }}
+        release_name: ${{ github.ref_name }}-android
+        body: Android build for ${{ github.ref_name }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload android apk
+      if: startsWith(github.ref, 'refs/tags/')
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        UPLOAD_URL: ${{ steps.create_release_android.outputs.upload_url }}
+      run: |
+        UPLOAD_URL="${UPLOAD_URL%\{*}"
+        f=android_client.apk
+        if [ -f "$f" ]; then
+          curl -sSL -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/vnd.android.package-archive" --data-binary @"$f" "$UPLOAD_URL?name=$(basename "$f")"
+        else
+          echo "Warning: $f not found, skipping"
+        fi
 
   build_spk:
 
@@ -101,7 +141,7 @@ jobs:
     steps:
 
     - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     - name: Set env
       run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
     - name: Build
@@ -112,13 +152,29 @@ jobs:
         docker exec spksrc /bin/bash -c 'cd /spksrc && sed -i s/1.15.6/1.19.5/g native/go/Makefile && echo "go1.19.5.src.tar.gz SHA256 8e486e8e85a281fc5ce3f0bedc5b9d2dbf6276d7db0b25d3ec034f313da0375f" > native/go/digests && make setup && cd /spksrc/spk/npc && make'
         cp ~/spksrc/packages/npc_noarch-all_${{ env.RELEASE_VERSION }}-1.spk ./npc_syno.spk
     - name: Upload
-      uses: softprops/action-gh-release@v1
+      id: create_release_spk
+      uses: actions/create-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
-        files: |
-          npc_syno.spk
+        tag_name: ${{ github.ref_name }}
+        release_name: ${{ github.ref_name }}-spk
+        body: Synology spk for ${{ github.ref_name }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload spk
+      if: startsWith(github.ref, 'refs/tags/')
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        UPLOAD_URL: ${{ steps.create_release_spk.outputs.upload_url }}
+      run: |
+        UPLOAD_URL="${UPLOAD_URL%\{*}"
+        f=npc_syno.spk
+        if [ -f "$f" ]; then
+          curl -sSL -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/octet-stream" --data-binary @"$f" "$UPLOAD_URL?name=$(basename "$f")"
+        else
+          echo "Warning: $f not found, skipping"
+        fi
 
   build_docker:
 
@@ -126,27 +182,27 @@ jobs:
     steps:
 
     - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     - name: Set env
       run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
     - name: Set up QEMU
-      uses: docker/setup-qemu-action@v1
+      uses: docker/setup-qemu-action@v2
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v1
+      uses: docker/setup-buildx-action@v2
     - name: Cache Docker layers
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       with:
         path: /tmp/.buildx-cache
         key: ${{ runner.os }}-buildx-${{ github.sha }}
         restore-keys: |
           ${{ runner.os }}-buildx-
     - name: Login to DockerHub
-      uses: docker/login-action@v1
+      uses: docker/login-action@v2
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
     - name: Build and push nps
-      uses: docker/build-push-action@v2
+      uses: docker/build-push-action@v3
       with:
         context: .
         file: ./Dockerfile.nps
@@ -156,7 +212,7 @@ jobs:
           ${{ secrets.DOCKERHUB_USERNAME }}/nps:latest
           ${{ secrets.DOCKERHUB_USERNAME }}/nps:${{ env.RELEASE_VERSION }}
     - name: Build and push npc
-      uses: docker/build-push-action@v2
+      uses: docker/build-push-action@v3
       with:
         context: .
         file: ./Dockerfile.npc
