@@ -10,6 +10,7 @@ COPY --from=builder /go/src/ehang.io/nps/nps /
 COPY --from=builder /go/src/ehang.io/nps/conf /conf-tpl
 COPY --from=builder /go/src/ehang.io/nps/web /web
 COPY --from=builder /go/src/ehang.io/nps/entrypoint.sh /
+RUN chmod +x /entrypoint.sh
 VOLUME /conf
 EXPOSE 80 443 8080 8024
 ENTRYPOINT [ "/entrypoint.sh"]
