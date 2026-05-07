@@ -88,6 +88,24 @@ func (s *IndexController) GetTunnel() {
 	s.AjaxTable(list, cnt, cnt, nil)
 }
 
+func (s *IndexController) PortList() {
+	data, err := server.GetPortList(
+		s.getEscapeString("mode"),
+		s.GetIntNoErr("start"),
+		s.GetIntNoErr("end"),
+		s.GetIntNoErr("id"),
+	)
+	if err != nil {
+		s.AjaxErr(err.Error())
+		return
+	}
+	s.Data["json"] = map[string]interface{}{
+		"status": 1,
+		"data":   data,
+	}
+	s.ServeJSON()
+}
+
 func (s *IndexController) Add() {
 	if s.Ctx.Request.Method == "GET" {
 		s.Data["type"] = s.getEscapeString("type")
@@ -283,8 +301,8 @@ func (s *IndexController) AddHost() {
 	} else {
 		id := int(file.GetDb().JsonDb.GetHostId())
 		h := &file.Host{
-			Id:   	id,
-			Host: 	s.getEscapeString("host"),
+			Id:   id,
+			Host: s.getEscapeString("host"),
 			Target: &file.Target{TargetStr: strings.ReplaceAll(s.getEscapeString("target"), "\r\n", "\n"),
 				LocalProxy: s.GetBoolNoErr("local_proxy")},
 			HeaderChange: s.getEscapeString("header"),

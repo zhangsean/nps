@@ -66,7 +66,14 @@
                     <div class="form-group" id="port">
                         <label class="col-sm-2 control-label font-bold" langtag="word-serverport"></label>
                         <div class="col-sm-10">
-                            <input value="{{.t.Port}}" class="form-control" type="text" name="port" placeholder="" langtag="info-suchasport">
+                            <div class="input-group">
+                                <input value="{{.t.Port}}" class="form-control" type="text" name="port" placeholder="" langtag="info-suchasport">
+                                <div class="input-group-append">
+                                    <button class="btn btn-outline btn-primary" id="open-port-selector" type="button" style="display:none;">
+                                        选择 <span class="js-proto-name">TCP</span> 端口
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="form-group" id="target">
@@ -115,6 +122,62 @@
         </div>
     </div>
 </div>
+<div class="modal fade" id="nps-port-selector-modal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content animated fadeIn">
+            <div class="modal-header">
+                <h4 class="modal-title">选择 <span class="js-current-mode">TCP</span> 可用端口</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="port-selector-toolbar">
+                    <div class="form-group">
+                        <label>端口段</label>
+                        <select class="form-control" id="port-range-segment"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>起始端口</label>
+                        <input type="number" class="form-control" id="port-range-start" min="1" max="65535" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label>每页范围</label>
+                        <select class="form-control" id="port-page-size">
+                            <option value="100">100</option>
+                            <option value="200" selected>200</option>
+                            <option value="500">500</option>
+                            <option value="1000">1000</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <button type="button" class="btn btn-default" id="prev-port-range">上一页</button>
+                        <button type="button" class="btn btn-default" id="next-port-range">下一页</button>
+                        <button type="button" class="btn btn-primary" id="load-port-range">刷新</button>
+                    </div>
+                </div>
+                <div class="port-selector-summary" id="port-range-summary"></div>
+                <div class="port-selector-empty" id="port-range-empty" style="display:none;"></div>
+                <div class="table-responsive">
+                    <table class="table table-hover table-bordered port-selector-table">
+                        <thead>
+                        <tr>
+                            <th class="port-col">端口</th>
+                            <th class="port-process-col">占用进程</th>
+                            <th class="port-quick-col">快捷可用端口</th>
+                        </tr>
+                        </thead>
+                        <tbody id="port-range-rows"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="use-start-port">使用起始端口</button>
+                <button type="button" class="btn btn-white" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
 <script>
     var arr = []
     arr["all"] = ["port", "target", "password", "local_path", "strip_pre", "local_proxy"]
@@ -158,6 +221,10 @@
             } else {
                 cid.val(cid.attr('oldId'))
             }
+        })
+        initPortSelector({
+            taskId: {{.t.Id}},
+            webBaseUrl: '{{.web_base_url}}'
         })
     })
 </script>

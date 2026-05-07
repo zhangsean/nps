@@ -31,6 +31,10 @@ func InitAllowPort() {
 	ports = common.GetPorts(p)
 }
 
+func GetAllowPortList() []int {
+	return append([]int(nil), ports...)
+}
+
 func TestServerPort(p int, m string) (b bool) {
 	if m == "p2p" || m == "secret" {
 		return true

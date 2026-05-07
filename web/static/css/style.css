@@ -9822,3 +9822,61 @@ body.md-skin {
     margin: 0;
   }
 }
+
+.port-selector-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 15px;
+}
+
+.port-selector-toolbar .form-group {
+  margin-bottom: 0;
+}
+
+.port-selector-summary {
+  margin-bottom: 10px;
+  color: #676a6c;
+}
+
+.port-selector-empty {
+  padding: 12px 0;
+  color: #676a6c;
+}
+
+.port-selector-table td {
+  vertical-align: middle;
+}
+
+.port-selector-table .port-col {
+  width: 120px;
+}
+
+.port-selector-table .port-process-col {
+  width: 220px;
+}
+
+.port-selector-table .port-quick-col {
+  width: 420px;
+}
+
+.port-occupied {
+  color: #9ea3a8;
+  font-weight: 600;
+}
+
+.port-current {
+  color: #1c84c6;
+  font-weight: 700;
+}
+
+.port-owner {
+  display: inline-block;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  cursor: help;
+}
