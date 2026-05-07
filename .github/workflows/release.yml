@@ -147,9 +147,17 @@ jobs:
     - name: Build
       run: |
         git clone https://github.com/cnlh/spksrc.git ~/spksrc
-        mkdir ~/spksrc/nps && cp -rf ./* ~/spksrc/nps/
+        mkdir -p ~/spksrc/nps && cp -rf ./* ~/spksrc/nps/
+        # prepare a local distrib tarball so spksrc won't try to download the (possibly outdated) remote archive
+        VER_NO_V=$(echo "${{ env.RELEASE_VERSION }}" | sed 's/^v//')
+        mkdir -p ~/spksrc/distrib ~/spksrc/tmp
+        cp -r ~/spksrc/nps ~/spksrc/tmp/nps-${VER_NO_V}
+        tar czf ~/spksrc/distrib/npc-${VER_NO_V}.tar.gz -C ~/spksrc/tmp nps-${VER_NO_V}
+        # also create a tarball with the raw tag name (in case spksrc expects the v-prefixed name)
+        tar czf ~/spksrc/distrib/npc-${{ env.RELEASE_VERSION }}.tar.gz -C ~/spksrc/tmp nps-${VER_NO_V} || true
+        # start build container and run packaging using the local distrib file; avoid `make setup` which downloads Go
         docker run -id --name spksrc --env VERSION=${{ env.RELEASE_VERSION }} -e GOPROXY=direct -v ~/spksrc:/spksrc synocommunity/spksrc /bin/bash
-        docker exec spksrc /bin/bash -c 'cd /spksrc && sed -i s/1.15.6/1.19.5/g native/go/Makefile && echo "go1.19.5.src.tar.gz SHA256 8e486e8e85a281fc5ce3f0bedc5b9d2dbf6276d7db0b25d3ec034f313da0375f" > native/go/digests && make setup && cd /spksrc/spk/npc && make'
+        docker exec spksrc /bin/bash -c 'cd /spksrc && sed -i s/1.15.6/1.19.5/g native/go/Makefile && echo "go1.19.5.src.tar.gz SHA256 8e486e8e85a281fc5ce3f0bedc5b9d2dbf6276d7db0b25d3ec034f313da0375f" > native/go/digests && cd /spksrc/spk/npc && make'
         cp ~/spksrc/packages/npc_noarch-all_${{ env.RELEASE_VERSION }}-1.spk ./npc_syno.spk
     - name: Upload
       id: create_release_spk
