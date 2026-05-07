@@ -17,17 +17,22 @@ jobs:
     outputs:
       upload_url: ${{ steps.get_upload_url.outputs.upload_url }}
     steps:
-    - name: Set up GitHub CLI
-      uses: cli/gh-action@v2
-      with:
-        version: latest
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install GitHub CLI
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        sudo apt-get install -y ca-certificates curl gnupg lsb-release
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+        sudo chmod 644 /usr/share/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+        sudo apt-get update
+        sudo apt-get install -y gh
 
     - name: Determine tag and create or locate release
       id: get_upload_url
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         set -euo pipefail
         # determine tag name (works for push or release events)
