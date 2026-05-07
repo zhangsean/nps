@@ -260,31 +260,25 @@
     };
 
     PortSelector.prototype.getQuickActions = function (row, blocked) {
-        var result = [];
+        var before = [];
+        var after = [];
         var port;
-        var count = 0;
-        var limit = 10;
 
-        if (row.is_current && this.canUsePort(row.port, blocked)) {
-            result.push(row.port);
-            count++;
-        }
-
-        for (port = row.port + 1; port <= this.state.rangeEnd && count < limit; port++) {
+        for (port = row.port - 1; port >= this.state.rangeStart && row.port - port <= 10 && before.length < 5; port--) {
             if (this.canUsePort(port, blocked)) {
-                result.push(port);
-                count++;
+                before.push(port);
             }
         }
 
-        for (port = row.port - 1; port >= this.state.rangeStart && count < limit; port--) {
+        before.reverse();
+
+        for (port = row.port + 1; port <= this.state.rangeEnd && port - row.port <= 10 && after.length < 5; port++) {
             if (this.canUsePort(port, blocked)) {
-                result.push(port);
-                count++;
+                after.push(port);
             }
         }
 
-        return result;
+        return before.concat(after);
     };
 
     PortSelector.prototype.canUsePort = function (port, blocked) {
