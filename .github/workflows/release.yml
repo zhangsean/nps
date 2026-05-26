@@ -75,6 +75,10 @@ jobs:
       id: go
     - name: Check out code into the Go module directory
       uses: actions/checkout@v4
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
     - name: Get dependencies
       run: |
         go get -v -t -d ./...
@@ -82,10 +86,50 @@ jobs:
             curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
             dep ensure
         fi
+    - name: Compress web assets
+      run: |
+        # Install compression tools
+        npm install -g html-minifier-terser terser clean-css-cli
+
+        # Compress all HTML files in web/views
+        find web/views -name "*.html" -type f | while read file; do
+          echo "Compressing: $file"
+          html-minifier-terser --collapse-whitespace --remove-comments --remove-optional-tags --remove-redundant-attributes --remove-script-type-attributes --use-short-doctype --minify-css true --minify-js true -o "$file" "$file"
+        done
+
+        # Compress all JS files in web/static/js
+        find web/static/js -name "*.js" -type f | while read file; do
+          echo "Compressing: $file"
+          terser "$file" -o "$file" -c -m
+        done
+
+        # Compress all CSS files in web/static/css
+        find web/static/css -name "*.css" -type f | while read file; do
+          echo "Compressing: $file"
+          cleancss -o "$file" "$file"
+        done
+
+        # Show size reduction
+        echo "=== Web assets size after compression ==="
+        du -sh web/
     - name: Build
       run: |
         chmod +x build.assets.sh
         ./build.assets.sh
+    - name: Compress binaries with UPX
+      run: |
+        # Install UPX
+        wget https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-amd64_linux.tar.xz
+        tar -xf upx-4.2.4-amd64_linux.tar.xz
+        sudo cp upx-4.2.4-amd64_linux/upx /usr/local/bin/
+
+        # Compress all nps and npc binaries (skip Windows .exe for now as UPX may have issues)
+        find . -name "nps" -type f -exec upx --best --lzma {} \; 2>/dev/null || true
+        find . -name "npc" -type f -exec upx --best --lzma {} \; 2>/dev/null || true
+
+        # Show size reduction
+        echo "=== Binary sizes after UPX compression ==="
+        du -sh *.tar.gz 2>/dev/null || true
     - name: Upload release assets (batch)
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
