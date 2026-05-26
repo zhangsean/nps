@@ -244,6 +244,18 @@
 		<zh-CN>分钟</zh-CN>
 		<en-US>min</en-US>
 	</lang>
+	<lang id="word-second">
+		<zh-CN>秒</zh-CN>
+		<en-US>sec</en-US>
+	</lang>
+	<lang id="word-hour">
+		<zh-CN>小时</zh-CN>
+		<en-US>hr</en-US>
+	</lang>
+	<lang id="word-day">
+		<zh-CN>天</zh-CN>
+		<en-US>day</en-US>
+	</lang>
 	<lang id="word-copyright">
 		<zh-CN>版权所有</zh-CN>
 		<en-US>Copyright</en-US>

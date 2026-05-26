@@ -250,9 +250,9 @@ func GetTunnel(start, length int, typeVal string, clientId int, search string) (
 			if (typeVal != "" && v.Mode != typeVal || (clientId != 0 && v.Client.Id != clientId)) || (typeVal == "" && clientId != v.Client.Id) {
 				continue
 			}
-			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || v.Port == common.GetIntNoErrByStr(search) || strings.Contains(v.Password, search) || strings.Contains(v.Remark, search) || strings.Contains(v.Client.VerifyKey, search)) {
-				continue
-			}
+			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || v.Port == common.GetIntNoErrByStr(search) || strings.Contains(v.Password, search) || strings.Contains(v.Remark, search) || strings.Contains(v.Client.VerifyKey, search) || strings.Contains(v.Target.TargetStr, search)) {
+			continue
+		}
 			cnt++
 			if _, ok := Bridge.Client.Load(v.Client.Id); ok || v.Target.LocalProxy {
 				v.Client.IsConnect = true

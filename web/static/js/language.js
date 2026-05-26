@@ -211,12 +211,25 @@ function getOfflineStatus(lastConnTime) {
 	if (lastConnTime === 0) {
 		return '<span class="badge badge-badge" langtag="word-not-connected"></span>'
 	}
-	let offMinute = parseInt((Date.parse(new Date())/1000 - lastConnTime)/60);
+	let offSeconds = parseInt(Date.parse(new Date())/1000 - lastConnTime);
+	let timeStr = '';
 	let color = '';
-	if (offMinute >= 10) {
-		color = 'red'
+
+	if (offSeconds < 60) {
+		timeStr = offSeconds + ' <span langtag="word-second"></span>';
+		color = '#28a745';
+	} else if (offSeconds < 3600) {
+		timeStr = parseInt(offSeconds / 60) + ' <span langtag="word-minute"></span>';
+		color = offSeconds >= 600 ? 'red' : '#ffc107';
+	} else if (offSeconds < 86400) {
+		timeStr = parseInt(offSeconds / 3600) + ' <span langtag="word-hour"></span>';
+		color = 'red';
+	} else {
+		timeStr = parseInt(offSeconds / 86400) + ' <span langtag="word-day"></span>';
+		color = 'red';
 	}
-	return '<span class="badge badge-badge" langtag="word-offline"></span><span style="color:' + color + '" title="' + timeString(lastConnTime) + '"> ' + offMinute + ' <span langtag="word-minute"></span></span>'
+
+	return '<span class="badge badge-badge" langtag="word-offline"></span><span style="color:' + color + '" title="掉线时间：' + timeString(lastConnTime) + '"> ' + timeStr + '</span>'
 }
 
 function timeString(time) {
