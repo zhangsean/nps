@@ -1,8 +1,8 @@
-FROM golang:1.22 as builder
+FROM golang:1.22 AS builder
 ARG GOPROXY=direct
 WORKDIR /go/src/ehang.io/nps
 COPY . .
-RUN go get -d -v ./...
+RUN go env -w GOPROXY=${GOPROXY} && go mod download
 RUN CGO_ENABLED=0 go build -ldflags="-w -s -extldflags -static" ./cmd/npc/npc.go
 
 FROM scratch
