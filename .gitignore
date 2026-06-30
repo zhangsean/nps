@@ -1,4 +1,5 @@
 .idea
 nps
 npc
+docker-build/
 .vscode/

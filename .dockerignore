@@ -1,0 +1,10 @@
+*
+!docker-build/
+!docker-build/**
+!conf/
+!conf/**
+!web/
+!web/**
+!entrypoint.sh
+!Dockerfile.nps
+!Dockerfile.npc
