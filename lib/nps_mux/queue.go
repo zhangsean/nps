@@ -237,6 +237,7 @@ func newReceiveWindowQueue() *receiveWindowQueue {
 
 func (Self *receiveWindowQueue) Push(element *listElement) {
 	var length, wait uint32
+	Self.chain.pushHead(unsafe.Pointer(element))
 	for {
 		ptrs := atomic.LoadUint64(&Self.lengthWait)
 		length, wait = Self.chain.head.unpack(ptrs)
@@ -246,7 +247,6 @@ func (Self *receiveWindowQueue) Push(element *listElement) {
 		}
 		// another goroutine change the length or into wait, make sure
 	}
-	Self.chain.pushHead(unsafe.Pointer(element))
 	if wait == 1 {
 		Self.allowPop()
 	}
@@ -270,10 +270,16 @@ startPop:
 		goto startPop // wait finish, trying to Get the New status
 	}
 	// length is not zero, so try to pop
+	spins := 0
 	for {
 		element = Self.TryPop()
 		if element != nil {
 			return
+		}
+		spins++
+		if spins > 16 {
+			time.Sleep(time.Millisecond)
+			continue
 		}
 		runtime.Gosched() // another goroutine is still pushing
 	}
