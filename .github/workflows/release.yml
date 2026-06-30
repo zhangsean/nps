@@ -94,7 +94,7 @@ jobs:
         # Compress all HTML files in web/views
         find web/views -name "*.html" -type f | while read file; do
           echo "Compressing: $file"
-          html-minifier-terser --collapse-whitespace --remove-comments --remove-optional-tags --remove-redundant-attributes --remove-script-type-attributes --use-short-doctype --minify-css true --minify-js true -o "$file" "$file"
+          html-minifier-terser --collapse-whitespace --remove-comments --remove-optional-tags --remove-redundant-attributes --remove-script-type-attributes --use-short-doctype --ignore-custom-fragments '/{{[\s\S]*?}}/' --minify-css true --minify-js true -o "$file" "$file"
         done
 
         # Compress all JS files in web/static/js
