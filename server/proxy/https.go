@@ -44,7 +44,6 @@ func (https *HttpsServer) Start() error {
 			return
 		} else {
 			if host.CertFilePath == "" || host.KeyFilePath == "" {
-				logs.Debug("加载客户端本地证书")
 				https.handleHttps2(c, serverName, rb, r)
 			} else {
 				logs.Debug("使用上传证书")
@@ -139,7 +138,7 @@ func (https *HttpsServer) handleHttps2(c net.Conn, hostName string, rb []byte, r
 	if targetAddr, err = host.Target.GetRandomTarget(); err != nil {
 		logs.Warn(err.Error())
 	}
-	logs.Info("new https connection,clientId %d,host %s,remote address %s", host.Client.Id, r.Host, c.RemoteAddr().String())
+	logs.Trace("new https connection,clientId %d,host %s,remote address %s", host.Client.Id, r.Host, c.RemoteAddr().String())
 	https.DealClient(conn.NewConn(c), host.Client, targetAddr, rb, common.CONN_TCP, nil, host.Client.Flow, host.Target.LocalProxy, nil)
 }
 
