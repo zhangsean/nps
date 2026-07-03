@@ -35,6 +35,22 @@
 </div>
 
 <script>
+    var indexBaseUrl = "{{.web_base_url}}";
+    var bridgeType = "{{.bridgeType}}";
+    var tunnelType = "{{.type}}";
+    var tunnelClientId = "{{.client_id}}";
+
+    function tunnelActionButton(action, path, id, btnClass, iconClass) {
+        return '<a href="javascript:;" class="btn btn-outline ' + btnClass + ' tunnel-action"'
+            + ' data-action="' + action + '" data-url="' + indexBaseUrl + path + '" data-id="' + id + '">'
+            + '<i class="fa ' + iconClass + '"></i></a>';
+    }
+
+    $(document).off('click.tunnelAction', '#table .tunnel-action').on('click.tunnelAction', '#table .tunnel-action', function (event) {
+        event.preventDefault();
+        var button = $(this);
+        submitform(button.attr('data-action'), button.attr('data-url'), {'id': Number(button.attr('data-id'))});
+    });
     $('#langtag').attr('langtag','page-list{{.name}}').next().html('<a title="跳转到域名列表" href="hostlist?client_id={{.client_id}}">{{.client_id}}</a>');
 
     /*bootstrap table*/
@@ -46,8 +62,8 @@
             return {
                 "offset": params.offset,
                 "limit": params.limit,
-                "type":{{.type}},
-                "client_id":{{.client_id}},
+                "type": tunnelType,
+                "client_id": tunnelClientId,
                 "search": params.search
             }
         },
@@ -67,7 +83,7 @@
         onLoadSuccess:function (data) {$('body').setLang ('.detail-view');},
         onPostBody: function (data) { if ($(this)[0].locale != undefined ) $('body').setLang ('#table'); },
         detailFormatter: function (index, row, element) {
-            tmp = '<b langtag="word-exportflow"></b>: ' + changeunit(row.Flow.ExportFlow) + '&emsp;'
+            var tmp = '<b langtag="word-exportflow"></b>: ' + changeunit(row.Flow.ExportFlow) + '&emsp;'
                     + '<b langtag="word-inletflow"></b>: ' + changeunit(row.Flow.InletFlow) + '&emsp;'
                     + '<b langtag="word-crypt"></b>: ' + row.Client.Cnf.Crypt + '&emsp;'
                     + '<b langtag="word-compress"></b>: ' + row.Client.Cnf.Compress + '&emsp;'
@@ -77,16 +93,16 @@
             if (row.Mode == "p2p") {
                 return tmp + "<br/><br>"
                         + '<b langtag="word-commandaccessp2p"></b>: ' + "<code>./npc{{.win}} -server={{.ip}}:{{.p}} -vkey=" + row.Client.VerifyKey
-                        + " -type=" +{{.bridgeType}} +" -password=" + row.Password + " -target=" + row.Target.TargetStr + "</code>" + "<br/><br>"
+                        + " -type=" + bridgeType + " -password=" + row.Password + " -target=" + row.Target.TargetStr + "</code>" + "<br/><br>"
                         + '<b langtag="word-commandaccessp2ps"></b>: ' + "<code>./npc{{.win}} -server={{.ip}}:{{.p}} -vkey=" + row.Client.VerifyKey
-                        + " -type=" +{{.bridgeType}} +" -password=" + row.Password + " -local_type=p2ps" + "</code>" + "<br/><br>"
+                        + " -type=" + bridgeType + " -password=" + row.Password + " -local_type=p2ps" + "</code>" + "<br/><br>"
                         + '<b langtag="word-commandaccessp2pt"></b>: ' + "<code>./npc{{.win}} -server={{.ip}}:{{.p}} -vkey=" + row.Client.VerifyKey
-                        + " -type=" +{{.bridgeType}} +" -password=" + row.Password + " -local_type=p2pt" + "</code>"
+                        + " -type=" + bridgeType + " -password=" + row.Password + " -local_type=p2pt" + "</code>"
 
             }
             if (row.Mode == "secret") {
                 return tmp + "<br/><br>" + '<b langtag="word-commandaccess"></b>: ' + "<code>./npc{{.win}} -server={{.ip}}:{{.p}} -vkey=" + row.Client.VerifyKey
-                        + " -type=" +{{.bridgeType}} +" -password=" + row.Password + " -local_type=secret" + "</code>"
+                        + " -type=" + bridgeType + " -password=" + row.Password + " -local_type=secret" + "</code>"
             }
             return tmp
         },
@@ -186,22 +202,19 @@
                 halign: 'center',
                 visible: true,//false表示不显示
                 formatter: function (value, row, index) {
-                    btn_group = '<div class="btn-group">'
-                    btn_group += '<a  href="{{.web_base_url}}/index/edit?id=' + row.Id
-                    btn_group += '" class="btn btn-outline btn-success"><i class="fa fa-edit"></i></a>'
-                    btn_group += '<a  href="{{.web_base_url}}/index/add?id=' + row.Id
-                    btn_group += '" class="btn btn-outline btn-primary"><i class="fa fa-copy"></i></a>'
+                    var buttons = ['<div class="btn-group">'];
+                    buttons.push('<a href="' + indexBaseUrl + '/index/edit?id=' + row.Id
+                        + '" class="btn btn-outline btn-success"><i class="fa fa-edit"></i></a>');
+                    buttons.push('<a href="' + indexBaseUrl + '/index/add?id=' + row.Id
+                        + '" class="btn btn-outline btn-primary"><i class="fa fa-copy"></i></a>');
                     if (row.Status) {
-                        btn_group += "<a onclick=\"submitform('stop', '{{.web_base_url}}/index/stop', {'id':" + row.Id
-                        btn_group += '})" class="btn btn-outline btn-warning"><i class="fa fa-pause"></i></a>'
+                        buttons.push(tunnelActionButton('stop', '/index/stop', row.Id, 'btn-warning', 'fa-pause'));
                     } else {
-                        btn_group += "<a onclick=\"submitform('start', '{{.web_base_url}}/index/start', {\'id\':" + row.Id
-                        btn_group += '})" class="btn btn-outline btn-primary"><i class="fa fa-play"></i></a>'
+                        buttons.push(tunnelActionButton('start', '/index/start', row.Id, 'btn-primary', 'fa-play'));
                     }
-                    btn_group += "<a onclick=\"submitform('delete', '{{.web_base_url}}/index/del', {'id':" + row.Id
-                    btn_group += '})" class="btn btn-outline btn-danger"><i class="fa fa-trash"></i></a>'
-                    btn_group += '</div>'
-                    return btn_group
+                    buttons.push(tunnelActionButton('delete', '/index/del', row.Id, 'btn-danger', 'fa-trash'));
+                    buttons.push('</div>');
+                    return buttons.join('');
                 }
             }
         ]

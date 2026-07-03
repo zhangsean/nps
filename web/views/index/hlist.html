@@ -36,7 +36,21 @@
 </div>
 
 <script>
-    cid = '{{.client_id}}';
+    var hostBaseUrl = "{{.web_base_url}}";
+
+    function hostActionButton(action, path, id, btnClass, iconClass) {
+        return '<a href="javascript:;" class="btn btn-outline ' + btnClass + ' host-action"'
+            + ' data-action="' + action + '" data-url="' + hostBaseUrl + path + '" data-id="' + id + '">'
+            + '<i class="fa ' + iconClass + '"></i></a>';
+    }
+
+    $(document).off('click.hostAction', '#table .host-action').on('click.hostAction', '#table .host-action', function (event) {
+        event.preventDefault();
+        var button = $(this);
+        submitform(button.attr('data-action'), button.attr('data-url'), {'id': Number(button.attr('data-id'))});
+    });
+
+    var cid = '{{.client_id}}';
     if (cid) {
         $('#langspan').attr('langtag','page-host-clientid').next().html('<a title="跳转到隧道列表" href="all?client_id=' + cid + '">' + cid + '</a>');
     }
@@ -139,7 +153,7 @@
                 halign: 'center',
                 visible: true,//false表示不显示
                 formatter: function (value, row, index) {
-                    hosturl = ((row.Scheme == 'http' ) ? 'http://' : 'https://') + row.Host + row.Location
+                    var hosturl = ((row.Scheme == 'http' ) ? 'http://' : 'https://') + row.Host + row.Location
                     if (row.Client.IsConnect) {
                         return '<a href="' + hosturl + '" target="_blank"><span class="badge badge-primary" langtag="word-online"></span></a>'
                     } else { // 在列表页显示存活或者长期离线提示
@@ -154,15 +168,14 @@
                 halign: 'center',
                 visible: true,//false表示不显示
                 formatter: function (value, row, index) {
-                    btn_group = '<div class="btn-group">'
-                        btn_group += '<a href="{{.web_base_url}}/index/edithost?id=' + row.Id
-                        btn_group += '" class="btn btn-outline btn-success"><i class="fa fa-edit"></i></a>'
-                        btn_group += '<a href="{{.web_base_url}}/index/addhost?id=' + row.Id
-                        btn_group += '" class="btn btn-outline btn-primary"><i class="fa fa-copy"></i></a>'
-                        btn_group += "<a onclick=\"submitform('delete', '{{.web_base_url}}/index/delhost', {'id':" + row.Id
-                        btn_group += '})" class="btn btn-outline btn-danger"><i class="fa fa-trash"></i></a>'
-                    btn_group += '</div>'
-                    return btn_group
+                    var buttons = ['<div class="btn-group">'];
+                    buttons.push('<a href="' + hostBaseUrl + '/index/edithost?id=' + row.Id
+                        + '" class="btn btn-outline btn-success"><i class="fa fa-edit"></i></a>');
+                    buttons.push('<a href="' + hostBaseUrl + '/index/addhost?id=' + row.Id
+                        + '" class="btn btn-outline btn-primary"><i class="fa fa-copy"></i></a>');
+                    buttons.push(hostActionButton('delete', '/index/delhost', row.Id, 'btn-danger', 'fa-trash'));
+                    buttons.push('</div>');
+                    return buttons.join('');
                 }
             }
         ]
