@@ -3,3 +3,5 @@ nps
 npc
 docker-build/
 .vscode/
+.playwright-cli/
+output/
