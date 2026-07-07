@@ -85,7 +85,7 @@
     PortSelector.prototype.open = function () {
         var mode = this.$type.val();
         if (mode !== "tcp" && mode !== "udp") {
-            alert("仅 TCP/UDP 隧道支持端口选择器");
+            npsNotify("仅 TCP/UDP 隧道支持端口选择器", 0);
             return;
         }
         this.state.mode = mode;
@@ -115,7 +115,7 @@
             },
             success: function (res) {
                 if (!res.status) {
-                    alert(langreply(res.msg || "加载端口列表失败"));
+                    npsNotify(langreply(res.msg || "加载端口列表失败"), 0);
                     return;
                 }
                 self.state.data = res.data;

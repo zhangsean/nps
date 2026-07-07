@@ -40,7 +40,11 @@ func (https *HttpsServer) Start() error {
 		r := buildHttpsRequest(serverName)
 		if host, err := file.GetDb().GetInfoByHost(serverName, r); err != nil {
 			c.Close()
-			logs.Debug("the url %s can't be parsed!,remote addr %s", serverName, c.RemoteAddr().String())
+			if isEmptyHostName(serverName) {
+				logs.Trace("the url %s can't be parsed!,remote addr %s", serverName, c.RemoteAddr().String())
+			} else {
+				logs.Debug("the url %s can't be parsed!,remote addr %s", serverName, c.RemoteAddr().String())
+			}
 			return
 		} else {
 			if host.CertFilePath == "" || host.KeyFilePath == "" {
@@ -122,7 +126,11 @@ func (https *HttpsServer) handleHttps2(c net.Conn, hostName string, rb []byte, r
 	var err error
 	if host, err = file.GetDb().GetInfoByHost(hostName, r); err != nil {
 		c.Close()
-		logs.Debug("the url %s can't be parsed!", hostName)
+		if isEmptyHostName(hostName) {
+			logs.Trace("the url %s can't be parsed!", hostName)
+		} else {
+			logs.Debug("the url %s can't be parsed!", hostName)
+		}
 		return
 	}
 	if err := https.CheckFlowAndConnNum(host.Client); err != nil {
@@ -165,7 +173,11 @@ func (https *HttpsServer) handleHttps(c net.Conn) {
 	var err error
 	if host, err = file.GetDb().GetInfoByHost(hostName, r); err != nil {
 		c.Close()
-		logs.Notice("the url %s can't be parsed!", hostName)
+		if isEmptyHostName(hostName) {
+			logs.Trace("the url %s can't be parsed!", hostName)
+		} else {
+			logs.Notice("the url %s can't be parsed!", hostName)
+		}
 		return
 	}
 	if err := https.CheckFlowAndConnNum(host.Client); err != nil {

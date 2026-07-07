@@ -81,7 +81,14 @@
 		if ( dom == '' ) {
 			$('#languagemenu span').text(' ' + languages['menu'][languages['current']]);
 			if (languages['current'] != getCookie('lang')) setCookie('lang', languages['current']);
-			if($("#table").length>0) $('#table').bootstrapTable('refreshOptions', { 'locale': languages['current']});
+			if($("#table").length>0) {
+				var tableOptions = $('#table').bootstrapTable('getOptions') || {};
+				$('#table').bootstrapTable('refreshOptions', {
+					'locale': languages['current'],
+					'pageNumber': tableOptions.pageNumber || 1,
+					'pageSize': tableOptions.pageSize
+				});
+			}
 		}
 		$.each($(dom + ' [langtag]'), function (i, item) {
 			var index = $(item).attr('langtag');
@@ -130,12 +137,120 @@ var languages = {};
 var charts = {};
 var chartdatas = {};
 var postsubmit;
+var npsNotifyTimer;
+
+function npsLangValue(key, fallback) {
+    var langobj = languages['content'] && languages['content'][key];
+    if ($.type(langobj) == 'undefined') return fallback;
+    if ($.type(langobj) == 'string') return langobj;
+    return langobj[languages['current']] || langobj[languages['default']] || fallback;
+}
 
 function langreply(langstr) {
     var langobj = languages['content']['reply'][langstr.replace(/[\s,\.\?]*/g,"").toLowerCase()];
     if ($.type(langobj) == 'undefined') return langstr
     langobj = (langobj[languages['current']] || langobj[languages['default']] || langstr);
     return langobj
+}
+
+function npsNotify(message, status) {
+    var box = $("#nps-notify");
+    if (!box.length) {
+        box = $('<div id="nps-notify" role="status" aria-live="polite"></div>');
+        $("body").append(box);
+    }
+    clearTimeout(npsNotifyTimer);
+    box.removeClass("is-success is-error is-show");
+    box.addClass(status ? "is-success" : "is-error");
+    box.text(message || "");
+    setTimeout(function () {
+        box.addClass("is-show");
+    }, 10);
+    npsNotifyTimer = setTimeout(function () {
+        box.removeClass("is-show");
+    }, 3000);
+}
+
+function npsConfirm(message, onConfirm) {
+    var confirmBox = $("#nps-confirm");
+    if (!confirmBox.length) {
+        confirmBox = $(
+            '<div id="nps-confirm" class="nps-confirm-mask" aria-hidden="true">' +
+                '<div class="nps-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="nps-confirm-title" aria-describedby="nps-confirm-message" tabindex="-1">' +
+                    '<div class="nps-confirm-head">' +
+                        '<span class="nps-confirm-icon"><i class="fa fa-exclamation-circle"></i></span>' +
+                        '<div id="nps-confirm-title" class="nps-confirm-title"></div>' +
+                    '</div>' +
+                    '<div id="nps-confirm-message" class="nps-confirm-message"></div>' +
+                    '<div class="nps-confirm-actions">' +
+                        '<button type="button" class="btn btn-white nps-confirm-cancel"></button>' +
+                        '<button type="button" class="btn btn-primary nps-confirm-ok"></button>' +
+                    '</div>' +
+                '</div>' +
+            '</div>'
+        );
+        $("body").append(confirmBox);
+
+        confirmBox.on("click", function (event) {
+            if (event.target === this) {
+                npsCloseConfirm();
+            }
+        });
+        confirmBox.on("click", ".nps-confirm-cancel", function () {
+            npsCloseConfirm();
+        });
+        confirmBox.on("click", ".nps-confirm-ok", function () {
+            var callback = confirmBox.data("onConfirm");
+            npsCloseConfirm();
+            if ($.isFunction(callback)) callback();
+        });
+        $(document).on("keydown.npsConfirm", function (event) {
+            if ((event.key === "Escape" || event.keyCode === 27) && confirmBox.hasClass("is-show")) {
+                npsCloseConfirm();
+            }
+        });
+    }
+
+    var isZh = (languages['current'] || '').indexOf('zh') === 0;
+    confirmBox.find(".nps-confirm-title").text(isZh ? "操作确认" : "Confirm action");
+    confirmBox.find(".nps-confirm-message").text(message || "");
+    confirmBox.find(".nps-confirm-cancel").text(npsLangValue("word-cancel", isZh ? "取消" : "Cancel"));
+    confirmBox.find(".nps-confirm-ok").text(isZh ? "确定" : "OK");
+    confirmBox.data("onConfirm", onConfirm);
+    confirmBox.attr("aria-hidden", "false").addClass("is-show");
+    confirmBox.find(".nps-confirm-cancel").trigger("focus");
+}
+
+function npsCloseConfirm() {
+    var confirmBox = $("#nps-confirm");
+    confirmBox.removeClass("is-show").attr("aria-hidden", "true").removeData("onConfirm");
+}
+
+function npsRefreshTable(selector) {
+    var table = $(selector || "#table");
+    var options;
+    if (!table.length || !$.isFunction(table.bootstrapTable)) {
+        document.location.reload();
+        return;
+    }
+    try {
+        options = table.bootstrapTable("getOptions") || {};
+        table.one("load-success.bs.table load-error.bs.table", function () {
+            var nextOptions = table.bootstrapTable("getOptions") || {};
+            if (options.pageNumber > 1 && nextOptions.pageNumber !== options.pageNumber) {
+                table.bootstrapTable("selectPage", options.pageNumber);
+            }
+        });
+        table.bootstrapTable("refresh", {
+            silent: true,
+            pageNumber: options.pageNumber || 1,
+            pageSize: options.pageSize,
+            sortName: options.sortName,
+            sortOrder: options.sortOrder
+        });
+    } catch (e) {
+        document.location.reload();
+    }
 }
 
 function goback() {
@@ -149,27 +264,33 @@ function submitform(action, url, postdata) {
 			v['value'] = v['value'].trim();
 		}
 	});
+    function submitAction(reloadAfterSuccess) {
+        postsubmit = reloadAfterSuccess;
+        $.ajax({
+            type: "POST",
+            url: url,
+            data: postdata,
+            success: function (res) {
+                npsNotify(langreply(res.msg), res.status);
+                if (res.status) {
+                    if (postsubmit) {npsRefreshTable();}else{history.back(-1);}
+                }
+            }
+        });
+    }
     switch (action) {
         case 'start':
         case 'stop':
         case 'delete':
             var langobj = languages['content']['confirm'][action];
-            action = (langobj[languages['current']] || langobj[languages['default']] || 'Are you sure you want to ' + action + ' it?');
-            if (! confirm(action)) return;
-            postsubmit = true;
+            var message = (langobj[languages['current']] || langobj[languages['default']] || 'Are you sure you want to ' + action + ' it?');
+            npsConfirm(message, function () {
+                submitAction(true);
+            });
+            return;
         case 'add':
         case 'edit':
-            $.ajax({
-                type: "POST",
-                url: url,
-                data: postdata,
-                success: function (res) {
-                    alert(langreply(res.msg));
-                    if (res.status) {
-                        if (postsubmit) {document.location.reload();}else{history.back(-1);}
-                    }
-                }
-            });
+            submitAction(false);
 			return;
 		case 'global':
 			$.ajax({
@@ -177,9 +298,9 @@ function submitform(action, url, postdata) {
 				url: url,
 				data: postdata,
 				success: function (res) {
-					alert(langreply(res.msg));
+					npsNotify(langreply(res.msg), res.status);
 					if (res.status) {
-						document.location.reload();
+						npsRefreshTable();
 					}
 				}
 			});

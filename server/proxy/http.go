@@ -107,7 +107,11 @@ func (s *httpServer) handleTunneling(w http.ResponseWriter, r *http.Request) {
 	var err error
 	host, err = file.GetDb().GetInfoByHost(r.Host, r)
 	if err != nil {
-		logs.Debug("the url %s %s %s can't be parsed!", r.URL.Scheme, r.Host, r.RequestURI)
+		if isEmptyRequestHost(r) {
+			logs.Trace("the url %s %s %s can't be parsed!", r.URL.Scheme, r.Host, r.RequestURI)
+		} else {
+			logs.Debug("the url %s %s %s can't be parsed!", r.URL.Scheme, r.Host, r.RequestURI)
+		}
 		return
 	}
 
@@ -175,7 +179,11 @@ reset:
 	}
 
 	if host, err = file.GetDb().GetInfoByHost(r.Host, r); err != nil {
-		logs.Notice("the url %s %s %s can't be parsed!, host %s, url %s, remote address %s", r.URL.Scheme, r.Host, r.RequestURI, r.Host, r.URL.Path, remoteAddr)
+		if isEmptyRequestHost(r) {
+			logs.Trace("the url %s %s %s can't be parsed!, host %s, url %s, remote address %s", r.URL.Scheme, r.Host, r.RequestURI, r.Host, r.URL.Path, remoteAddr)
+		} else {
+			logs.Notice("the url %s %s %s can't be parsed!, host %s, url %s, remote address %s", r.URL.Scheme, r.Host, r.RequestURI, r.Host, r.URL.Path, remoteAddr)
+		}
 		c.Close()
 		return
 	}
@@ -283,7 +291,11 @@ reset:
 		//What happened ，Why one character less???
 		r.Method = resetReqMethod(r.Method)
 		if hostTmp, err := file.GetDb().GetInfoByHost(r.Host, r); err != nil {
-			logs.Notice("The url %s://%s%s can't be parsed!", r.URL.Scheme, r.Host, r.RequestURI)
+			if isEmptyRequestHost(r) {
+				logs.Trace("The url %s://%s%s can't be parsed!", r.URL.Scheme, r.Host, r.RequestURI)
+			} else {
+				logs.Notice("The url %s://%s%s can't be parsed!", r.URL.Scheme, r.Host, r.RequestURI)
+			}
 			break
 		} else if host != hostTmp {
 			host = hostTmp
@@ -303,6 +315,14 @@ func resetReqMethod(method string) string {
 		return "POST"
 	}
 	return method
+}
+
+func isEmptyRequestHost(r *http.Request) bool {
+	return r == nil || isEmptyHostName(r.Host)
+}
+
+func isEmptyHostName(host string) bool {
+	return strings.TrimSpace(host) == ""
 }
 
 func (s *httpServer) NewServer(port int, scheme string) *http.Server {

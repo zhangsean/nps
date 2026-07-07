@@ -5186,6 +5186,107 @@ table.table-mail tr td {
 .text-white {
   color: #ffffff;
 }
+#nps-notify {
+  position: fixed;
+  top: 74px;
+  right: 24px;
+  z-index: 3000;
+  min-width: 180px;
+  max-width: 360px;
+  padding: 10px 14px;
+  border-radius: 3px;
+  color: #ffffff;
+  font-size: 13px;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+#nps-notify.is-show {
+  opacity: 1;
+  transform: translateY(0);
+}
+#nps-notify.is-success {
+  background: #1ab394;
+}
+#nps-notify.is-error {
+  background: #ed5565;
+}
+#nps-confirm {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(47, 64, 80, 0.42);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+#nps-confirm.is-show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.nps-confirm-dialog {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: 0 18px 48px rgba(47, 64, 80, 0.24);
+  transform: translateY(10px) scale(0.98);
+  transition: transform 180ms ease;
+}
+#nps-confirm.is-show .nps-confirm-dialog {
+  transform: translateY(0) scale(1);
+}
+.nps-confirm-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 20px 22px 12px;
+}
+.nps-confirm-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #fff4e5;
+  color: #f8ac59;
+  font-size: 16px;
+  flex: 0 0 auto;
+}
+.nps-confirm-title {
+  color: #2f4050;
+  font-size: 16px;
+  font-weight: 700;
+}
+.nps-confirm-message {
+  padding: 0 22px 20px 68px;
+  color: #676a6c;
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+.nps-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 18px;
+  border-top: 1px solid #e7eaec;
+  background: #fbfbfc;
+}
+.nps-confirm-actions .btn {
+  min-width: 78px;
+}
 .simple_tag {
   background-color: #f3f3f4;
   border: 1px solid #e7eaec;

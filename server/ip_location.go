@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -92,6 +93,24 @@ func getCachedIpRegion(ip string) string {
 		})
 	}
 	return region
+}
+
+func RefreshClientRegion(c *file.Client) (string, error) {
+	ip := strings.TrimSpace(c.Addr)
+	if !beego.AppConfig.DefaultBool("ip_location", true) {
+		return "", errors.New("ip location is disabled")
+	}
+	if !isPublicGeoIP(ip) {
+		saveClientRegion(c, "", "")
+		return "", nil
+	}
+	ipLocationCache.Delete(ip)
+	region, ok := fetchIpRegion(ip)
+	if !ok || region == "" {
+		return "", errors.New("refresh ip location failed")
+	}
+	saveClientRegion(c, region, ip)
+	return region, nil
 }
 
 func fetchIpRegion(ip string) (string, bool) {
