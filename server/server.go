@@ -251,8 +251,8 @@ func GetTunnel(start, length int, typeVal string, clientId int, search string) (
 				continue
 			}
 			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || v.Port == common.GetIntNoErrByStr(search) || strings.Contains(v.Password, search) || strings.Contains(v.Remark, search) || strings.Contains(v.Client.VerifyKey, search) || strings.Contains(v.Target.TargetStr, search)) {
-			continue
-		}
+				continue
+			}
 			cnt++
 			if _, ok := Bridge.Client.Load(v.Client.Id); ok || v.Target.LocalProxy {
 				v.Client.IsConnect = true
@@ -302,7 +302,7 @@ func dealClientData() {
 		} else {
 			v.IsConnect = false
 		}
-		enrichClientAddrRegion(v)
+		enrichClientRegion(v)
 		//v.Flow.InletFlow = 0
 		//v.Flow.ExportFlow = 0
 		//if len(file.GetDb().JsonDb.Hosts) == 0 {

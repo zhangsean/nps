@@ -141,8 +141,8 @@
                 halign: 'center',
                 visible: true,//false表示不显示
                 formatter: function (value, row, index) {
-                    if (row.AddrRegion) {
-                        return escapeHtml(value) + '<br/><small class="text-muted">' + escapeHtml(row.AddrRegion) + '</small>'
+                    if (row.ClientRegion) {
+                        return escapeHtml(value) + '<br/><small class="text-muted">' + escapeHtml(row.ClientRegion) + '</small>'
                     }
                     return escapeHtml(value)
                 }

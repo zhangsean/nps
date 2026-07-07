@@ -37,7 +37,8 @@ type Client struct {
 	Id              int        //id
 	VerifyKey       string     //verify key
 	Addr            string     //the ip of client
-	AddrRegion      string     //the region of client ip
+	ClientRegion    string     //the region of client ip
+	ClientIp        string     //the ip matching ClientRegion
 	Remark          string     //remark
 	Status          bool       //is allow connect
 	IsConnect       bool       //is the client connect

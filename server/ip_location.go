@@ -16,7 +16,7 @@ import (
 	"github.com/astaxie/beego/logs"
 )
 
-const defaultIpLocationApi = "http://ip-api.com/json/%s?fields=status,message,country,regionName,city,query&lang=zh-CN"
+const defaultIpLocationApi = "http://ip-api.com/json/%s?fields=status,message,regionName,city,query&lang=zh-CN"
 
 type ipLocationCacheEntry struct {
 	Region  string
@@ -26,7 +26,6 @@ type ipLocationCacheEntry struct {
 type ipLocationResponse struct {
 	Status     string `json:"status"`
 	Message    string `json:"message"`
-	Country    string `json:"country"`
 	RegionName string `json:"regionName"`
 	City       string `json:"city"`
 	Query      string `json:"query"`
@@ -39,15 +38,34 @@ var (
 	ipLocationBlockedUntil time.Time
 )
 
-func enrichClientAddrRegion(c *file.Client) {
-	c.AddrRegion = ""
+func enrichClientRegion(c *file.Client) {
 	ip := strings.TrimSpace(c.Addr)
 	if !isPublicGeoIP(ip) || !beego.AppConfig.DefaultBool("ip_location", true) {
+		saveClientRegion(c, "", "")
 		return
 	}
-	if region := getCachedIpRegion(ip); region != "" {
-		c.AddrRegion = region
+	if c.ClientRegion != "" && c.ClientIp == "" {
+		saveClientRegion(c, c.ClientRegion, ip)
+		return
 	}
+	if c.ClientRegion != "" && c.ClientIp == ip {
+		return
+	}
+	if c.ClientIp != ip {
+		saveClientRegion(c, "", "")
+	}
+	if region := getCachedIpRegion(ip); region != "" {
+		saveClientRegion(c, region, ip)
+	}
+}
+
+func saveClientRegion(c *file.Client, region, ip string) {
+	if c.ClientRegion == region && c.ClientIp == ip {
+		return
+	}
+	c.ClientRegion = region
+	c.ClientIp = ip
+	file.GetDb().JsonDb.StoreClientsToJsonFile()
 }
 
 func getCachedIpRegion(ip string) string {
@@ -108,7 +126,7 @@ func fetchIpRegion(ip string) (string, bool) {
 		logs.Warn("query ip location %s failed: %s", ip, data.Message)
 		return "", false
 	}
-	region := strings.Join(nonEmptyStrings(data.Country, data.RegionName, data.City), " ")
+	region := strings.Join(nonEmptyStrings(data.RegionName, data.City), " ")
 	return region, region != ""
 }
 

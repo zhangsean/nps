@@ -1,6 +1,12 @@
 package server
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/astaxie/beego"
+)
 
 func TestIsPublicGeoIP(t *testing.T) {
 	tests := []struct {
@@ -44,7 +50,7 @@ func TestBuildIpLocationUrl(t *testing.T) {
 			name: "invalid template falls back",
 			api:  "https://example.com/json",
 			ip:   "36.22.237.47",
-			want: "http://ip-api.com/json/36.22.237.47?fields=status,message,country,regionName,city,query&lang=zh-CN",
+			want: "http://ip-api.com/json/36.22.237.47?fields=status,message,regionName,city,query&lang=zh-CN",
 		},
 	}
 	for _, tt := range tests {
@@ -53,5 +59,30 @@ func TestBuildIpLocationUrl(t *testing.T) {
 				t.Fatalf("url = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestFetchIpRegionOmitsCountry(t *testing.T) {
+	oldClient := ipLocationHTTPClient
+	oldApi := beego.AppConfig.String("ip_location_api")
+	defer func() {
+		ipLocationHTTPClient = oldClient
+		beego.AppConfig.Set("ip_location_api", oldApi)
+	}()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"status":"success","country":"中国","regionName":"浙江","city":"杭州","query":"47.96.89.55"}`))
+	}))
+	defer server.Close()
+
+	ipLocationHTTPClient = server.Client()
+	beego.AppConfig.Set("ip_location_api", server.URL+"/json/{ip}")
+
+	region, ok := fetchIpRegion("47.96.89.55")
+	if !ok {
+		t.Fatal("fetchIpRegion ok = false, want true")
+	}
+	if region != "浙江 杭州" {
+		t.Fatalf("region = %q, want %q", region, "浙江 杭州")
 	}
 }
