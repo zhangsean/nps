@@ -1,8 +1,10 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -14,9 +16,10 @@ import (
 	"ehang.io/nps/lib/file"
 	"github.com/astaxie/beego"
 	"github.com/astaxie/beego/logs"
+	"golang.org/x/net/html"
 )
 
-const defaultIpLocationApi = "http://ip-api.com/json/%s?fields=status,message,regionName,city,query&lang=zh-CN"
+const defaultIpLocationApi = "https://ip.cn/ip/%s.html"
 
 type ipLocationCacheEntry struct {
 	Region  string
@@ -103,6 +106,7 @@ func fetchIpRegion(ip string) (string, bool) {
 		logs.Warn("create ip location request error: %s", err.Error())
 		return "", false
 	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; nps-ip-location/1.0)")
 
 	resp, err := ipLocationHTTPClient.Do(req)
 	if err != nil {
@@ -117,17 +121,112 @@ func fetchIpRegion(ip string) (string, bool) {
 		return "", false
 	}
 
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024))
+	if err != nil {
+		logs.Warn("read ip location %s response error: %s", ip, err.Error())
+		return "", false
+	}
+	region, ok := parseIpRegion(resp.Header.Get("Content-Type"), body)
+	if !ok {
+		logs.Warn("parse ip location %s response failed", ip)
+		return "", false
+	}
+	return region, true
+}
+
+func parseIpRegion(contentType string, body []byte) (string, bool) {
+	text := strings.TrimSpace(string(body))
+	if strings.Contains(strings.ToLower(contentType), "json") || strings.HasPrefix(text, "{") {
+		return parseJsonIpRegion(body)
+	}
+	return parseIpCnRegion(body)
+}
+
+func parseJsonIpRegion(body []byte) (string, bool) {
 	var data ipLocationResponse
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		logs.Warn("decode ip location %s error: %s", ip, err.Error())
+	if err := json.Unmarshal(body, &data); err != nil {
 		return "", false
 	}
 	if data.Status != "success" {
-		logs.Warn("query ip location %s failed: %s", ip, data.Message)
 		return "", false
 	}
-	region := strings.Join(nonEmptyStrings(data.RegionName, data.City), " ")
+	region := normalizeIpRegion(strings.Join(nonEmptyStrings(data.RegionName, data.City), " "))
 	return region, region != ""
+}
+
+func parseIpCnRegion(body []byte) (string, bool) {
+	doc, err := html.Parse(bytes.NewReader(body))
+	if err != nil {
+		return "", false
+	}
+	if region := findIpCnTableRegion(doc); region != "" {
+		return region, true
+	}
+	return "", false
+}
+
+func findIpCnTableRegion(n *html.Node) string {
+	if n.Type == html.ElementNode && n.Data == "tr" {
+		th := findDirectElement(n, "th")
+		td := findDirectElement(n, "td")
+		if th != nil && td != nil && strings.Contains(normalizeSpace(nodeText(th)), "所在地理位置") {
+			if span := findDescendantElement(td, "span"); span != nil {
+				return normalizeIpRegion(nodeText(span))
+			}
+			return normalizeIpRegion(nodeText(td))
+		}
+	}
+	for child := n.FirstChild; child != nil; child = child.NextSibling {
+		if region := findIpCnTableRegion(child); region != "" {
+			return region
+		}
+	}
+	return ""
+}
+
+func findDirectElement(n *html.Node, tag string) *html.Node {
+	for child := n.FirstChild; child != nil; child = child.NextSibling {
+		if child.Type == html.ElementNode && child.Data == tag {
+			return child
+		}
+	}
+	return nil
+}
+
+func findDescendantElement(n *html.Node, tag string) *html.Node {
+	if n.Type == html.ElementNode && n.Data == tag {
+		return n
+	}
+	for child := n.FirstChild; child != nil; child = child.NextSibling {
+		if result := findDescendantElement(child, tag); result != nil {
+			return result
+		}
+	}
+	return nil
+}
+
+func nodeText(n *html.Node) string {
+	if n.Type == html.TextNode {
+		return n.Data
+	}
+	var b strings.Builder
+	for child := n.FirstChild; child != nil; child = child.NextSibling {
+		b.WriteString(nodeText(child))
+		b.WriteString(" ")
+	}
+	return b.String()
+}
+
+func normalizeIpRegion(region string) string {
+	fields := strings.Fields(normalizeSpace(region))
+	if len(fields) > 0 && fields[0] == "中国" {
+		fields = fields[1:]
+	}
+	return strings.Join(fields, " ")
+}
+
+func normalizeSpace(value string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
 }
 
 func buildIpLocationUrl(api, ip string) string {

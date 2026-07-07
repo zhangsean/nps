@@ -50,7 +50,7 @@ func TestBuildIpLocationUrl(t *testing.T) {
 			name: "invalid template falls back",
 			api:  "https://example.com/json",
 			ip:   "36.22.237.47",
-			want: "http://ip-api.com/json/36.22.237.47?fields=status,message,regionName,city,query&lang=zh-CN",
+			want: "https://ip.cn/ip/36.22.237.47.html",
 		},
 	}
 	for _, tt := range tests {
@@ -62,7 +62,37 @@ func TestBuildIpLocationUrl(t *testing.T) {
 	}
 }
 
-func TestFetchIpRegionOmitsCountry(t *testing.T) {
+func TestParseIpCnRegion(t *testing.T) {
+	body := []byte(`
+<table>
+<tbody>
+<tr><th><span>您查询的IP</span></th><td><span>36.22.237.47</span></td></tr>
+<tr>
+<th><span>所在地理位置</span></th>
+<td><span style="display:inline-block;min-width: 150px;">中国 浙江 杭州</span><a>查看区县</a></td>
+</tr>
+</tbody>
+</table>`)
+	region, ok := parseIpRegion("text/html; charset=utf-8", body)
+	if !ok {
+		t.Fatal("parseIpRegion ok = false, want true")
+	}
+	if region != "浙江 杭州" {
+		t.Fatalf("region = %q, want %q", region, "浙江 杭州")
+	}
+}
+
+func TestParseJsonIpRegionOmitsCountry(t *testing.T) {
+	region, ok := parseIpRegion("application/json", []byte(`{"status":"success","country":"中国","regionName":"浙江","city":"杭州","query":"47.96.89.55"}`))
+	if !ok {
+		t.Fatal("parseIpRegion ok = false, want true")
+	}
+	if region != "浙江 杭州" {
+		t.Fatalf("region = %q, want %q", region, "浙江 杭州")
+	}
+}
+
+func TestFetchIpRegionFromIpCnHtml(t *testing.T) {
 	oldClient := ipLocationHTTPClient
 	oldApi := beego.AppConfig.String("ip_location_api")
 	defer func() {
@@ -71,14 +101,21 @@ func TestFetchIpRegionOmitsCountry(t *testing.T) {
 	}()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"status":"success","country":"中国","regionName":"浙江","city":"杭州","query":"47.96.89.55"}`))
+		if got := r.Header.Get("User-Agent"); got == "" {
+			t.Fatal("User-Agent is empty")
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`
+<table>
+<tr><th><span>所在地理位置</span></th><td><span>中国 浙江 杭州</span></td></tr>
+</table>`))
 	}))
 	defer server.Close()
 
 	ipLocationHTTPClient = server.Client()
-	beego.AppConfig.Set("ip_location_api", server.URL+"/json/{ip}")
+	beego.AppConfig.Set("ip_location_api", server.URL+"/ip/{ip}.html")
 
-	region, ok := fetchIpRegion("47.96.89.55")
+	region, ok := fetchIpRegion("36.22.237.47")
 	if !ok {
 		t.Fatal("fetchIpRegion ok = false, want true")
 	}
