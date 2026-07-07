@@ -60,7 +60,7 @@ func (s *DbUtils) GetClientList(start, length int, search, sort, order string, c
 			if clientId != 0 && clientId != v.Id {
 				continue
 			}
-			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || strings.Contains(v.VerifyKey, search) || strings.Contains(v.Remark, search) || strings.Contains(v.Addr, search)) {
+			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || strings.Contains(v.VerifyKey, search) || strings.Contains(v.Remark, search) || strings.Contains(v.Addr, search) || strings.Contains(v.AddrRegion, search)) {
 				continue
 			}
 			cnt++
@@ -79,7 +79,6 @@ func (s *DbUtils) GetIdByVerifyKey(vKey string, addr string) (id int, err error)
 	s.JsonDb.Clients.Range(func(key, value interface{}) bool {
 		v := value.(*Client)
 		if common.Getverifyval(v.VerifyKey) == vKey && v.Status {
-			v.Addr = common.GetIpByAddr(addr)
 			id = v.Id
 			exist = true
 			return false
@@ -90,6 +89,12 @@ func (s *DbUtils) GetIdByVerifyKey(vKey string, addr string) (id int, err error)
 		return
 	}
 	return 0, errors.New("not found")
+}
+
+func (s *DbUtils) SetClientAddr(id int, addr string) {
+	if v, ok := s.JsonDb.Clients.Load(id); ok {
+		v.(*Client).Addr = addr
+	}
 }
 
 func (s *DbUtils) NewTask(t *Tunnel) (err error) {

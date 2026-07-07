@@ -50,6 +50,10 @@
             + '<i class="fa ' + iconClass + '"></i></a>';
     }
 
+    function escapeHtml(value) {
+        return $('<div/>').text(value || '').html();
+    }
+
     $(document).off('click.clientAction', '#table .client-action').on('click.clientAction', '#table .client-action', function (event) {
         event.preventDefault();
         var button = $(this);
@@ -135,7 +139,13 @@
                 field: 'Addr',//域值
                 title: '<span langtag="word-address"></span>',//标题
                 halign: 'center',
-                visible: true//false表示不显示
+                visible: true,//false表示不显示
+                formatter: function (value, row, index) {
+                    if (row.AddrRegion) {
+                        return escapeHtml(value) + '<br/><small class="text-muted">' + escapeHtml(row.AddrRegion) + '</small>'
+                    }
+                    return escapeHtml(value)
+                }
             },
             {
                 field: 'InletFlow',//域值

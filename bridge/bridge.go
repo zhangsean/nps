@@ -121,6 +121,14 @@ func (s *Bridge) GetHealthFromClient(id int, c *conn.Conn) {
 	for {
 		if info, status, err := c.GetHealthInfo(); err != nil {
 			break
+		} else if strings.HasPrefix(info, common.CIP_PREFIX) {
+			addr := strings.TrimPrefix(info, common.CIP_PREFIX)
+			if displayAddr, ok := common.NormalizeClientDisplayAddr(addr); ok {
+				file.GetDb().SetClientAddr(id, displayAddr)
+				logs.Info("clientId %d display address updated to %s", id, displayAddr)
+			} else {
+				logs.Warn("clientId %d report invalid display address %s", id, addr)
+			}
 		} else if !status { //the status is true , return target to the targetArr
 			file.GetDb().JsonDb.Tasks.Range(func(key, value interface{}) bool {
 				v := value.(*file.Tunnel)
@@ -280,6 +288,7 @@ func (s *Bridge) typeDeal(typeVal string, c *conn.Conn, id int, vs string) {
 			v.(*Client).signal = c
 			v.(*Client).Version = vs
 		}
+		file.GetDb().SetClientAddr(id, common.GetIpByAddr(c.Conn.RemoteAddr().String()))
 		go s.GetHealthFromClient(id, c)
 		logs.Info("clientId %d connection succeeded, address:%s ", id, c.Conn.RemoteAddr())
 	case common.WORK_CHAN:

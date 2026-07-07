@@ -18,6 +18,7 @@ const (
 	WORK_P2P_END      = "p2pe"
 	WORK_P2P_LAST     = "p2pl"
 	WORK_STATUS       = "stus"
+	CIP_PREFIX        = "cip="
 	RES_MSG           = "msg0"
 	RES_CLOSE         = "clse"
 	NEW_UDP_CONN      = "udpc" //p2p udp conn

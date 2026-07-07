@@ -28,6 +28,7 @@ var (
 	logType        = flag.String("log", "stdout", "Log output mode（stdout|file）")
 	connType       = flag.String("type", "tcp", "Connection type with the server（kcp|tcp）")
 	proxyUrl       = flag.String("proxy", "", "proxy socks5 url(eg:socks5://111:222@127.0.0.1:9007)")
+	cip            = flag.String("cip", "", "client display ip on nps client list")
 	logLevel       = flag.String("log_level", "7", "log level 0~7")
 	registerTime   = flag.Int("time", 2, "register time long /h")
 	localPort      = flag.Int("local_port", 2000, "p2p local port")
@@ -230,6 +231,9 @@ func run() {
 	if *verifyKey == "" {
 		*verifyKey, _ = env["NPC_SERVER_VKEY"]
 	}
+	if *cip == "" {
+		*cip, _ = env["NPC_CIP"]
+	}
 	if *verifyKey != "" && *serverAddr != "" && *configPath == "" {
 		client.SetTlsEnable(*tlsEnable)
 		logs.Info("the version of client is %s, the core version of client is %s,tls enable is %t", version.VERSION, version.GetVersion(), client.GetTlsEnable())
@@ -240,7 +244,7 @@ func run() {
 			go func() {
 				for {
 					logs.Info("start vkey:" + key)
-					client.NewRPClient(*serverAddr, key, *connType, *proxyUrl, nil, *disconnectTime).Start()
+					client.NewRPClient(*serverAddr, key, *connType, *proxyUrl, nil, *disconnectTime, *cip).Start()
 					logs.Info("Client closed! It will be reconnected in five seconds")
 					time.Sleep(time.Second * 5)
 				}

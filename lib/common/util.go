@@ -269,6 +269,24 @@ func GetIpByAddr(addr string) string {
 	return arr[0]
 }
 
+func NormalizeClientDisplayAddr(addr string) (string, bool) {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return "", false
+	}
+	if ip := net.ParseIP(strings.Trim(addr, "[]")); ip != nil {
+		return ip.String(), true
+	}
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "", false
+	}
+	if ip := net.ParseIP(strings.Trim(host, "[]")); ip != nil {
+		return ip.String(), true
+	}
+	return "", false
+}
+
 // get port from the complete address
 func GetPortByAddr(addr string) int {
 	arr := strings.Split(addr, ":")

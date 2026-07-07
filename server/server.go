@@ -277,8 +277,8 @@ func GetTunnel(start, length int, typeVal string, clientId int, search string) (
 
 // get client list
 func GetClientList(start, length int, search, sort, order string, clientId int) (list []*file.Client, cnt int) {
-	list, cnt = file.GetDb().GetClientList(start, length, search, sort, order, clientId)
 	dealClientData()
+	list, cnt = file.GetDb().GetClientList(start, length, search, sort, order, clientId)
 	return
 }
 
@@ -302,6 +302,7 @@ func dealClientData() {
 		} else {
 			v.IsConnect = false
 		}
+		enrichClientAddrRegion(v)
 		//v.Flow.InletFlow = 0
 		//v.Flow.ExportFlow = 0
 		//if len(file.GetDb().JsonDb.Hosts) == 0 {

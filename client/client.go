@@ -25,6 +25,7 @@ type TRPClient struct {
 	bridgeConnType string
 	proxyUrl       string
 	vKey           string
+	cip            string
 	p2pAddr        map[string]string
 	tunnel         *nps_mux.Mux
 	signal         *conn.Conn
@@ -35,13 +36,18 @@ type TRPClient struct {
 }
 
 // new client
-func NewRPClient(svraddr string, vKey string, bridgeConnType string, proxyUrl string, cnf *config.Config, disconnectTime int) *TRPClient {
+func NewRPClient(svraddr string, vKey string, bridgeConnType string, proxyUrl string, cnf *config.Config, disconnectTime int, cip ...string) *TRPClient {
+	var displayIP string
+	if len(cip) > 0 {
+		displayIP = strings.TrimSpace(cip[0])
+	}
 	return &TRPClient{
 		svrAddr:        svraddr,
 		p2pAddr:        make(map[string]string, 0),
 		vKey:           vKey,
 		bridgeConnType: bridgeConnType,
 		proxyUrl:       proxyUrl,
+		cip:            displayIP,
 		cnf:            cnf,
 		disconnectTime: disconnectTime,
 		once:           sync.Once{},
@@ -71,9 +77,12 @@ retry:
 		goto retry
 	}
 	logs.Info("Successful connection with server %s", s.svrAddr)
+	s.signal = c
+	if s.cip != "" {
+		s.reportCip()
+	}
 	//monitor the connection
 	go s.ping()
-	s.signal = c
 	//start a channel connection
 	go s.newChan()
 	//start health check if the it's open
@@ -83,6 +92,17 @@ retry:
 	NowStatus = 1
 	//msg connection, eg udp
 	s.handleMain()
+}
+
+func (s *TRPClient) reportCip() {
+	addr, ok := common.NormalizeClientDisplayAddr(s.cip)
+	if !ok {
+		logs.Warn("cip %s is invalid, ignore it", s.cip)
+		return
+	}
+	if _, err := s.signal.SendHealthInfo(common.CIP_PREFIX+addr, "1"); err != nil {
+		logs.Warn("report cip %s error: %s", addr, err.Error())
+	}
 }
 
 // handle main connection
