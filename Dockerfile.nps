@@ -1,13 +1,17 @@
 FROM alpine
 ARG TARGETARCH
 ARG TARGETVARIANT
+ENV TZ=Asia/Shanghai
 
 COPY docker-build/nps/${TARGETARCH}${TARGETVARIANT}/nps /nps
 COPY conf /conf-tpl
 COPY web /web
 COPY entrypoint.sh /
 
-RUN chmod +x /nps /entrypoint.sh
+RUN apk add --no-cache tzdata \
+    && cp /usr/share/zoneinfo/${TZ} /etc/localtime \
+    && echo "${TZ}" > /etc/timezone \
+    && chmod +x /nps /entrypoint.sh
 
 VOLUME /conf
 EXPOSE 80 443 8080 8024
