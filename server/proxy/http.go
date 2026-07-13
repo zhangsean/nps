@@ -17,7 +17,6 @@ import (
 	"ehang.io/nps/lib/common"
 	"ehang.io/nps/lib/conn"
 	"ehang.io/nps/lib/file"
-	"ehang.io/nps/lib/goroutine"
 	"ehang.io/nps/server/connection"
 	"github.com/astaxie/beego/logs"
 )
@@ -33,6 +32,11 @@ type httpServer struct {
 	addOrigin     bool
 	cache         *cache.Cache
 	cacheLen      int
+}
+
+type pendingHTTPResponseLog struct {
+	request   *http.Request
+	accessLog *httpAccessLogRecord
 }
 
 func NewHttp(bridge *bridge.Bridge, c *file.Tunnel, httpPort, httpsPort int, useCache bool, cacheLen int, addOrigin bool) *httpServer {
@@ -105,13 +109,18 @@ func (s *httpServer) handleTunneling(w http.ResponseWriter, r *http.Request) {
 
 	var host *file.Host
 	var err error
+	if isHealthCheckRequest(r) {
+		writeHealthCheck(w, r)
+		return
+	}
 	host, err = file.GetDb().GetInfoByHost(r.Host, r)
 	if err != nil {
 		if isEmptyRequestHost(r) {
-			logs.Trace("the url %s %s %s can't be parsed!", r.URL.Scheme, r.Host, r.RequestURI)
-		} else {
-			logs.Debug("the url %s %s %s can't be parsed!", r.URL.Scheme, r.Host, r.RequestURI)
+			s.writeHttpNotFound(w, r)
+			return
 		}
+		logs.Debug("the url %s %s %s can't be parsed!", r.URL.Scheme, r.Host, r.RequestURI)
+		s.writeHttpNotFound(w, r)
 		return
 	}
 
@@ -153,6 +162,7 @@ func (s *httpServer) handleHttp(c *conn.Conn, r *http.Request) {
 		isReset    bool
 		wg         sync.WaitGroup
 		remoteAddr string
+		accessLogs []*httpAccessLogRecord
 	)
 	defer func() {
 		if connClient != nil {
@@ -161,6 +171,11 @@ func (s *httpServer) handleHttp(c *conn.Conn, r *http.Request) {
 			s.writeConnFail(c.Conn)
 		}
 		c.Close()
+	}()
+	defer func() {
+		for _, accessLog := range accessLogs {
+			accessLog.Finish("")
+		}
 	}()
 reset:
 	if isReset {
@@ -180,10 +195,10 @@ reset:
 
 	if host, err = file.GetDb().GetInfoByHost(r.Host, r); err != nil {
 		if isEmptyRequestHost(r) {
-			logs.Trace("the url %s %s %s can't be parsed!, host %s, url %s, remote address %s", r.URL.Scheme, r.Host, r.RequestURI, r.Host, r.URL.Path, remoteAddr)
-		} else {
-			logs.Notice("the url %s %s %s can't be parsed!, host %s, url %s, remote address %s", r.URL.Scheme, r.Host, r.RequestURI, r.Host, r.URL.Path, remoteAddr)
+			c.Close()
+			return
 		}
+		logs.Notice("the url %s %s %s can't be parsed!, host %s, url %s, remote address %s", r.URL.Scheme, r.Host, r.RequestURI, r.Host, r.URL.Path, remoteAddr)
 		c.Close()
 		return
 	}
@@ -217,10 +232,11 @@ reset:
 		return
 	}
 	connClient = conn.GetConn(target, lk.Crypt, lk.Compress, host.Client.Rate, true)
+	pendingResponses := make(chan pendingHTTPResponseLog, 16)
 
 	//read from inc-client
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		isReset = false
 		defer connClient.Close()
 		defer func() {
@@ -230,34 +246,45 @@ reset:
 			}
 		}()
 
-		err1 := goroutine.CopyBuffer(c, connClient, host.Client.Flow, nil, "")
-		if err1 != nil {
-			return
-		}
-
-		resp, err := http.ReadResponse(bufio.NewReader(connClient), r)
-		if err != nil || resp == nil || r == nil {
-			// if there got broken pipe, http.ReadResponse will get a nil
-			//break
-			return
-		} else {
-			lenConn := conn.NewLenConn(c)
-			if err := resp.Write(lenConn); err != nil {
-				logs.Error(err)
-				//break
+		responseReader := bufio.NewReader(connClient)
+		for pendingResponse := range pendingResponses {
+			resp, err := http.ReadResponse(responseReader, pendingResponse.request)
+			if err != nil || resp == nil {
+				if pendingResponse.accessLog != nil && err != nil {
+					pendingResponse.accessLog.Finish(err.Error())
+				}
 				return
 			}
+			pendingResponse.accessLog.SetStatusCode(resp.StatusCode)
+			lenConn := conn.NewLenConn(c)
+			if err := resp.Write(lenConn); err != nil {
+				pendingResponse.accessLog.SetResponseBytes(int64(lenConn.Len))
+				pendingResponse.accessLog.Finish(err.Error())
+				logs.Error(err)
+				return
+			}
+			if resp.Body != nil {
+				_ = resp.Body.Close()
+			}
+			pendingResponse.accessLog.SetResponseBytes(int64(lenConn.Len))
+			pendingResponse.accessLog.Finish("")
 		}
 	}()
 
 	for {
+		accessLog := newHTTPAccessLogRecord(r, remoteAddr, host, lk.Host, false)
+		accessLog.SetRequestBytes(estimateHTTPAccessLogRequestBytes(r))
 		//if the cache start and the request is in the cache list, return the cache
 		if s.useCache {
 			if v, ok := s.cache.Get(filepath.Join(host.Host, r.URL.Path)); ok {
 				n, err := c.Write(v.([]byte))
 				if err != nil {
+					accessLog.Finish(err.Error())
 					break
 				}
+				accessLog.SetStatusCode(http.StatusOK)
+				accessLog.SetResponseBytes(int64(n))
+				accessLog.Finish("")
 				logs.Trace("%s request, method %s, host %s, url %s, remote address %s, return cache", r.URL.Scheme, r.Method, r.Host, r.URL.Path, c.RemoteAddr().String())
 				host.Client.Flow.Add(int64(n), int64(n))
 				//if return cache and does not create a new conn with client and Connection is not set or close, close the connection.
@@ -269,41 +296,50 @@ reset:
 		}
 
 		//change the host and header and set proxy setting
+		accessLogs = append(accessLogs, accessLog)
 		common.ChangeHostAndHeader(r, host.HostChange, host.HeaderChange, c.Conn.RemoteAddr().String())
 		logs.Trace("Request: %s %s://%s%s, remote addr %s, remote target %s", r.Method, r.URL.Scheme, r.Host, r.URL.Path, c.RemoteAddr().String(), lk.Host)
 		//write
 		lenConn = conn.NewLenConn(connClient)
 		//lenConn = conn.LenConn
 		if err := r.Write(lenConn); err != nil {
+			accessLog.SetRequestBytes(int64(lenConn.Len))
+			accessLog.Finish(err.Error())
 			logs.Error("Request write error:", err)
 			break
 		}
+		accessLog.SetRequestBytes(int64(lenConn.Len))
+		pendingResponses <- pendingHTTPResponseLog{request: r, accessLog: accessLog}
 		host.Client.Flow.Add(int64(lenConn.Len), int64(lenConn.Len))
 
 	readReq:
 		//read req from connection
 		r, err = http.ReadRequest(bufio.NewReader(c))
 		if err != nil {
-			//break
-			return
+			for _, pendingAccessLog := range accessLogs {
+				pendingAccessLog.Finish(err.Error())
+			}
+			break
 		}
 		r.URL.Scheme = scheme
 		//What happened ，Why one character less???
 		r.Method = resetReqMethod(r.Method)
 		if hostTmp, err := file.GetDb().GetInfoByHost(r.Host, r); err != nil {
 			if isEmptyRequestHost(r) {
-				logs.Trace("The url %s://%s%s can't be parsed!", r.URL.Scheme, r.Host, r.RequestURI)
-			} else {
-				logs.Notice("The url %s://%s%s can't be parsed!", r.URL.Scheme, r.Host, r.RequestURI)
+				break
 			}
+			logs.Notice("The url %s://%s%s can't be parsed!", r.URL.Scheme, r.Host, r.RequestURI)
 			break
 		} else if host != hostTmp {
 			host = hostTmp
 			isReset = true
+			close(pendingResponses)
 			connClient.Close()
+			wg.Wait()
 			goto reset
 		}
 	}
+	close(pendingResponses)
 	wg.Wait()
 }
 
@@ -323,6 +359,38 @@ func isEmptyRequestHost(r *http.Request) bool {
 
 func isEmptyHostName(host string) bool {
 	return strings.TrimSpace(host) == ""
+}
+
+func getRequestRemoteAddr(r *http.Request, fallback string) string {
+	if r != nil {
+		if remoteAddr := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); remoteAddr != "" {
+			return remoteAddr
+		}
+		if remoteAddr := strings.TrimSpace(r.RemoteAddr); remoteAddr != "" {
+			return remoteAddr
+		}
+	}
+	return fallback
+}
+
+func isHealthCheckRequest(r *http.Request) bool {
+	return r != nil && r.URL != nil && r.URL.Path == "/health"
+}
+
+func writeHealthCheck(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	if r.Method != http.MethodHead {
+		_, _ = w.Write([]byte("ok"))
+	}
+}
+
+func (s *httpServer) writeHttpNotFound(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusNotFound)
+	if r.Method != http.MethodHead {
+		_, _ = w.Write(s.errorContent)
+	}
 }
 
 func (s *httpServer) NewServer(port int, scheme string) *http.Server {

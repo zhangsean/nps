@@ -57,6 +57,10 @@ func (rp *HttpReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request)
 		rw.Write([]byte("502 Bad Gateway"))
 		return
 	}
+	accessLog := newHTTPAccessLogRecord(req, getRequestRemoteAddr(req, ""), host, targetAddr, false)
+	accessLog.SetStatusCode(http.StatusSwitchingProtocols)
+	accessLog.SetRequestBytes(estimateHTTPAccessLogRequestBytes(req))
+	defer accessLog.Finish("")
 	host.Client.CutConn()
 
 	req = req.WithContext(context.WithValue(req.Context(), "host", host))

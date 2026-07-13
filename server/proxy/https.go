@@ -41,10 +41,9 @@ func (https *HttpsServer) Start() error {
 		if host, err := file.GetDb().GetInfoByHost(serverName, r); err != nil {
 			c.Close()
 			if isEmptyHostName(serverName) {
-				logs.Trace("the url %s can't be parsed!,remote addr %s", serverName, c.RemoteAddr().String())
-			} else {
-				logs.Debug("the url %s can't be parsed!,remote addr %s", serverName, c.RemoteAddr().String())
+				return
 			}
+			logs.Debug("the url %s can't be parsed!,remote addr %s", serverName, c.RemoteAddr().String())
 			return
 		} else {
 			if host.CertFilePath == "" || host.KeyFilePath == "" {
@@ -127,10 +126,9 @@ func (https *HttpsServer) handleHttps2(c net.Conn, hostName string, rb []byte, r
 	if host, err = file.GetDb().GetInfoByHost(hostName, r); err != nil {
 		c.Close()
 		if isEmptyHostName(hostName) {
-			logs.Trace("the url %s can't be parsed!", hostName)
-		} else {
-			logs.Debug("the url %s can't be parsed!", hostName)
+			return
 		}
+		logs.Debug("the url %s can't be parsed!", hostName)
 		return
 	}
 	if err := https.CheckFlowAndConnNum(host.Client); err != nil {
@@ -143,11 +141,17 @@ func (https *HttpsServer) handleHttps2(c net.Conn, hostName string, rb []byte, r
 		logs.Warn("auth error", err, r.RemoteAddr)
 		return
 	}
+	errText := ""
 	if targetAddr, err = host.Target.GetRandomTarget(); err != nil {
+		errText = err.Error()
 		logs.Warn(err.Error())
 	}
 	logs.Trace("new https connection,clientId %d,host %s,remote address %s", host.Client.Id, r.Host, c.RemoteAddr().String())
-	https.DealClient(conn.NewConn(c), host.Client, targetAddr, rb, common.CONN_TCP, nil, host.Client.Flow, host.Target.LocalProxy, nil)
+	accessLog := newHTTPAccessLogRecord(r, c.RemoteAddr().String(), host, targetAddr, true)
+	counterConn := newHTTPAccessLogReadCounterConn(c, int64(len(rb)))
+	https.DealClient(conn.NewConn(counterConn), host.Client, targetAddr, rb, common.CONN_TCP, nil, host.Client.Flow, host.Target.LocalProxy, nil)
+	accessLog.SetRequestBytes(counterConn.Bytes())
+	accessLog.Finish(errText)
 }
 
 // close
@@ -174,10 +178,9 @@ func (https *HttpsServer) handleHttps(c net.Conn) {
 	if host, err = file.GetDb().GetInfoByHost(hostName, r); err != nil {
 		c.Close()
 		if isEmptyHostName(hostName) {
-			logs.Trace("the url %s can't be parsed!", hostName)
-		} else {
-			logs.Notice("the url %s can't be parsed!", hostName)
+			return
 		}
+		logs.Notice("the url %s can't be parsed!", hostName)
 		return
 	}
 	if err := https.CheckFlowAndConnNum(host.Client); err != nil {
@@ -190,11 +193,17 @@ func (https *HttpsServer) handleHttps(c net.Conn) {
 		logs.Warn("auth error", err, r.RemoteAddr)
 		return
 	}
+	errText := ""
 	if targetAddr, err = host.Target.GetRandomTarget(); err != nil {
+		errText = err.Error()
 		logs.Warn(err.Error())
 	}
 	logs.Trace("new https connection,clientId %d,host %s,remote address %s", host.Client.Id, r.Host, c.RemoteAddr().String())
-	https.DealClient(conn.NewConn(c), host.Client, targetAddr, rb, common.CONN_TCP, nil, host.Client.Flow, host.Target.LocalProxy, nil)
+	accessLog := newHTTPAccessLogRecord(r, c.RemoteAddr().String(), host, targetAddr, true)
+	counterConn := newHTTPAccessLogReadCounterConn(c, int64(len(rb)))
+	https.DealClient(conn.NewConn(counterConn), host.Client, targetAddr, rb, common.CONN_TCP, nil, host.Client.Flow, host.Target.LocalProxy, nil)
+	accessLog.SetRequestBytes(counterConn.Bytes())
+	accessLog.Finish(errText)
 }
 
 type HttpsListener struct {
@@ -246,9 +255,11 @@ func GetServerNameFromClientHello(c net.Conn) (string, []byte) {
 // build https request
 func buildHttpsRequest(hostName string) *http.Request {
 	r := new(http.Request)
+	r.Method = http.MethodConnect
 	r.RequestURI = "/"
 	r.URL = new(url.URL)
 	r.URL.Scheme = "https"
+	r.URL.Path = "/"
 	r.Host = hostName
 	return r
 }

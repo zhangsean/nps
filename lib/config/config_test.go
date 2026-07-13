@@ -49,15 +49,26 @@ p=2
 }
 
 func TestDealCommon(t *testing.T) {
-	s := `server=127.0.0.1:8284
-tp=tcp
-vkey=123`
-	f := new(CommonConfig)
-	f.Server = "127.0.0.1:8284"
-	f.Tp = "tcp"
-	f.VKey = "123"
-	if c := dealCommon(s); *c != *f {
-		t.Fail()
+	s := `server_addr=127.0.0.1:8284
+conn_type=tcp
+vkey=123
+cip_url=http://127.0.0.1/ip?token=a=b
+cip_interval=60`
+	c := dealCommon(s)
+	if c.Server != "127.0.0.1:8284" {
+		t.Fatalf("expected server 127.0.0.1:8284, got %q", c.Server)
+	}
+	if c.Tp != "tcp" {
+		t.Fatalf("expected tp tcp, got %q", c.Tp)
+	}
+	if c.VKey != "123" {
+		t.Fatalf("expected vkey 123, got %q", c.VKey)
+	}
+	if c.CipUrl != "http://127.0.0.1/ip?token=a=b" {
+		t.Fatalf("expected cip_url with query, got %q", c.CipUrl)
+	}
+	if c.CipInterval != 60 {
+		t.Fatalf("expected cip_interval 60, got %d", c.CipInterval)
 	}
 }
 

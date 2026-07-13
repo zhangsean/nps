@@ -4,8 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"ehang.io/nps/lib/nps_mux"
+	"errors"
+	"io"
 	"net"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,20 +29,41 @@ type TRPClient struct {
 	proxyUrl       string
 	vKey           string
 	cip            string
+	cipUrl         string
+	cipInterval    time.Duration
+	lastCip        string
 	p2pAddr        map[string]string
 	tunnel         *nps_mux.Mux
 	signal         *conn.Conn
 	ticker         *time.Ticker
+	closeCh        chan struct{}
 	cnf            *config.Config
 	disconnectTime int
 	once           sync.Once
+	cipMu          sync.Mutex
 }
 
+const (
+	DefaultCipURL      = "http://www.3322.org/dyndns/getip"
+	DefaultCipInterval = 3600
+	minCipInterval     = 30
+)
+
+var ipv4Pattern = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
+
 // new client
-func NewRPClient(svraddr string, vKey string, bridgeConnType string, proxyUrl string, cnf *config.Config, disconnectTime int, cip ...string) *TRPClient {
+func NewRPClient(svraddr string, vKey string, bridgeConnType string, proxyUrl string, cnf *config.Config, disconnectTime int, cip string, cipUrl string, cipInterval int) *TRPClient {
 	var displayIP string
-	if len(cip) > 0 {
-		displayIP = strings.TrimSpace(cip[0])
+	if cipInterval <= 0 {
+		cipInterval = DefaultCipInterval
+	}
+	if cipInterval < minCipInterval {
+		cipInterval = minCipInterval
+	}
+	displayIP = strings.TrimSpace(cip)
+	cipUrl = strings.TrimSpace(cipUrl)
+	if cipUrl == "" {
+		cipUrl = DefaultCipURL
 	}
 	return &TRPClient{
 		svrAddr:        svraddr,
@@ -48,8 +72,11 @@ func NewRPClient(svraddr string, vKey string, bridgeConnType string, proxyUrl st
 		bridgeConnType: bridgeConnType,
 		proxyUrl:       proxyUrl,
 		cip:            displayIP,
+		cipUrl:         cipUrl,
+		cipInterval:    time.Duration(cipInterval) * time.Second,
 		cnf:            cnf,
 		disconnectTime: disconnectTime,
+		closeCh:        make(chan struct{}),
 		once:           sync.Once{},
 	}
 }
@@ -79,7 +106,10 @@ retry:
 	logs.Info("Successful connection with server %s", s.svrAddr)
 	s.signal = c
 	if s.cip != "" {
-		s.reportCip()
+		s.reportCip(s.cip)
+	}
+	if s.cipUrl != "" {
+		go s.watchCip()
 	}
 	//monitor the connection
 	go s.ping()
@@ -94,15 +124,78 @@ retry:
 	s.handleMain()
 }
 
-func (s *TRPClient) reportCip() {
-	addr, ok := common.NormalizeClientDisplayAddr(s.cip)
+func (s *TRPClient) reportCip(addr string) bool {
+	rawAddr := addr
+	addr, ok := common.NormalizeClientDisplayAddr(addr)
 	if !ok {
-		logs.Warn("cip %s is invalid, ignore it", s.cip)
-		return
+		logs.Warn("cip %s is invalid, ignore it", rawAddr)
+		return false
 	}
+	s.cipMu.Lock()
+	if s.lastCip == addr {
+		s.cipMu.Unlock()
+		return true
+	}
+	s.cipMu.Unlock()
 	if _, err := s.signal.SendHealthInfo(common.CIP_PREFIX+addr, "1"); err != nil {
 		logs.Warn("report cip %s error: %s", addr, err.Error())
+		return false
 	}
+	s.cipMu.Lock()
+	s.lastCip = addr
+	s.cipMu.Unlock()
+	logs.Info("report cip %s success", addr)
+	return true
+}
+
+func (s *TRPClient) watchCip() {
+	s.fetchAndReportCip()
+	ticker := time.NewTicker(s.cipInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			s.fetchAndReportCip()
+		case <-s.closeCh:
+			return
+		}
+	}
+}
+
+func (s *TRPClient) fetchAndReportCip() {
+	addr, err := fetchPublicCip(s.cipUrl)
+	if err != nil {
+		logs.Warn("query cip from %s error: %s", s.cipUrl, err.Error())
+		return
+	}
+	s.reportCip(addr)
+}
+
+func fetchPublicCip(cipUrl string) (string, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(cipUrl)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return "", errors.New("unexpected status " + resp.Status)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 512))
+	if err != nil {
+		return "", err
+	}
+	return extractPublicCipResponse(string(body))
+}
+
+func extractPublicCipResponse(body string) (string, error) {
+	for _, match := range ipv4Pattern.FindAllString(body, -1) {
+		addr, ok := common.NormalizeClientDisplayAddr(match)
+		if ok {
+			return addr, nil
+		}
+	}
+	return "", errors.New("invalid cip response")
 }
 
 // handle main connection
@@ -334,4 +427,5 @@ func (s *TRPClient) closing() {
 	if s.ticker != nil {
 		s.ticker.Stop()
 	}
+	close(s.closeCh)
 }

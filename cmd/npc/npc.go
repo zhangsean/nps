@@ -29,6 +29,8 @@ var (
 	connType       = flag.String("type", "tcp", "Connection type with the server（kcp|tcp）")
 	proxyUrl       = flag.String("proxy", "", "proxy socks5 url(eg:socks5://111:222@127.0.0.1:9007)")
 	cip            = flag.String("cip", "", "client display ip on nps client list")
+	cipUrl         = flag.String("cip_url", client.DefaultCipURL, "url for querying client public ip")
+	cipInterval    = flag.Int("cip_interval", client.DefaultCipInterval, "client public ip query interval seconds")
 	logLevel       = flag.String("log_level", "7", "log level 0~7")
 	registerTime   = flag.Int("time", 2, "register time long /h")
 	localPort      = flag.Int("local_port", 2000, "p2p local port")
@@ -234,6 +236,15 @@ func run() {
 	if *cip == "" {
 		*cip, _ = env["NPC_CIP"]
 	}
+	if *cipUrl == client.DefaultCipURL {
+		*cipUrl, _ = env["NPC_CIP_URL"]
+	}
+	if *cipUrl == "" {
+		*cipUrl = client.DefaultCipURL
+	}
+	if v, ok := env["NPC_CIP_INTERVAL"]; ok && *cipInterval == client.DefaultCipInterval {
+		*cipInterval = common.GetIntNoErrByStr(v)
+	}
 	if *verifyKey != "" && *serverAddr != "" && *configPath == "" {
 		client.SetTlsEnable(*tlsEnable)
 		logs.Info("the version of client is %s, the core version of client is %s,tls enable is %t", version.VERSION, version.GetVersion(), client.GetTlsEnable())
@@ -244,7 +255,7 @@ func run() {
 			go func() {
 				for {
 					logs.Info("start vkey:" + key)
-					client.NewRPClient(*serverAddr, key, *connType, *proxyUrl, nil, *disconnectTime, *cip).Start()
+					client.NewRPClient(*serverAddr, key, *connType, *proxyUrl, nil, *disconnectTime, *cip, *cipUrl, *cipInterval).Start()
 					logs.Info("Client closed! It will be reconnected in five seconds")
 					time.Sleep(time.Second * 5)
 				}

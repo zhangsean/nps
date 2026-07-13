@@ -188,7 +188,7 @@ re:
 	} else {
 		logs.Notice("web access login username:%s password:%s", cnf.CommonConfig.Client.WebUserName, cnf.CommonConfig.Client.WebPassword)
 	}
-	NewRPClient(cnf.CommonConfig.Server, vkey, cnf.CommonConfig.Tp, cnf.CommonConfig.ProxyUrl, cnf, cnf.CommonConfig.DisconnectTime, cnf.CommonConfig.Cip).Start()
+	NewRPClient(cnf.CommonConfig.Server, vkey, cnf.CommonConfig.Tp, cnf.CommonConfig.ProxyUrl, cnf, cnf.CommonConfig.DisconnectTime, cnf.CommonConfig.Cip, cnf.CommonConfig.CipUrl, cnf.CommonConfig.CipInterval).Start()
 	CloseLocalServer()
 	goto re
 }

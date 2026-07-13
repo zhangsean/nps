@@ -18,6 +18,8 @@ type CommonConfig struct {
 	TlsEnable        bool
 	ProxyUrl         string
 	Cip              string
+	CipUrl           string
+	CipInterval      int
 	Client           *file.Client
 	DisconnectTime   int
 }
@@ -111,7 +113,7 @@ func dealCommon(s string) *CommonConfig {
 	c.Client = file.NewClient("", true, true)
 	c.Client.Cnf = new(file.Config)
 	for _, v := range splitStr(s) {
-		item := strings.Split(v, "=")
+		item := strings.SplitN(v, "=", 2)
 		if len(item) == 0 {
 			continue
 		} else if len(item) == 1 {
@@ -142,6 +144,10 @@ func dealCommon(s string) *CommonConfig {
 			c.ProxyUrl = item[1]
 		case "cip":
 			c.Cip = item[1]
+		case "cip_url":
+			c.CipUrl = item[1]
+		case "cip_interval":
+			c.CipInterval = common.GetIntNoErrByStr(item[1])
 		case "rate_limit":
 			c.Client.RateLimit = common.GetIntNoErrByStr(item[1])
 		case "flow_limit":
