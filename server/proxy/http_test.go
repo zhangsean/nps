@@ -242,13 +242,16 @@ func TestHTTPAccessLogSkipAndErrorType(t *testing.T) {
 	oldDisabled := httpAccessLog.disabled
 	oldMinMs := httpAccessLog.minMs
 	oldExcludes := httpAccessLog.excludes
+	oldHosts := httpAccessLog.hosts
 	httpAccessLog.disabled = false
 	httpAccessLog.minMs = 100
 	httpAccessLog.excludes = []string{"/health", "/static/*"}
+	httpAccessLog.hosts = []string{"localhost", "*.internal.test", "api.example.com:8080"}
 	t.Cleanup(func() {
 		httpAccessLog.disabled = oldDisabled
 		httpAccessLog.minMs = oldMinMs
 		httpAccessLog.excludes = oldExcludes
+		httpAccessLog.hosts = oldHosts
 	})
 
 	record := &httpAccessLogRecord{
@@ -262,6 +265,20 @@ func TestHTTPAccessLogSkipAndErrorType(t *testing.T) {
 	record.path = "/static/app.js"
 	if !shouldSkipHTTPAccessLog(record) {
 		t.Fatalf("excluded static path should be skipped")
+	}
+	record.path = "/api"
+	record.entry.DurationMS = 101
+	record.entry.Host = "localhost:1080"
+	if !shouldSkipHTTPAccessLog(record) {
+		t.Fatalf("excluded host without port should match host with port")
+	}
+	record.entry.Host = "shop.internal.test"
+	if !shouldSkipHTTPAccessLog(record) {
+		t.Fatalf("excluded wildcard host should be skipped")
+	}
+	record.entry.Host = "api.example.com:8080"
+	if !shouldSkipHTTPAccessLog(record) {
+		t.Fatalf("excluded host with port should be skipped")
 	}
 	if got := classifyHTTPAccessLogError("write tcp: broken pipe"); got != "client_closed" {
 		t.Fatalf("unexpected error type %q", got)

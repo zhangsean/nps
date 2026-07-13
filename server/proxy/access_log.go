@@ -64,6 +64,7 @@ var httpAccessLog = struct {
 	writeCh  chan []byte
 	maskKeys map[string]struct{}
 	excludes []string
+	hosts    []string
 	minMs    int64
 	fields   map[string]struct{}
 	initErr  error
@@ -341,6 +342,11 @@ func shouldSkipHTTPAccessLog(record *httpAccessLogRecord) bool {
 	if httpAccessLog.minMs > 0 && record.entry.DurationMS < httpAccessLog.minMs {
 		return true
 	}
+	for _, pattern := range httpAccessLog.hosts {
+		if matchHTTPAccessLogHost(pattern, record.entry.Host) {
+			return true
+		}
+	}
 	for _, pattern := range httpAccessLog.excludes {
 		if matchHTTPAccessLogPath(pattern, record.path) {
 			return true
@@ -357,6 +363,65 @@ func matchHTTPAccessLogPath(pattern, path string) bool {
 		return strings.HasPrefix(path, strings.TrimSuffix(pattern, "*"))
 	}
 	return path == pattern
+}
+
+func matchHTTPAccessLogHost(pattern, host string) bool {
+	pattern = strings.ToLower(strings.TrimSpace(pattern))
+	host = strings.ToLower(strings.TrimSpace(host))
+	if pattern == "" || host == "" {
+		return false
+	}
+	if matchHTTPAccessLogWildcard(pattern, host) {
+		return true
+	}
+	if !strings.Contains(pattern, ":") {
+		hostOnly := stripHTTPAccessLogHostPort(host)
+		if hostOnly != host && matchHTTPAccessLogWildcard(pattern, hostOnly) {
+			return true
+		}
+	}
+	return false
+}
+
+func stripHTTPAccessLogHostPort(host string) string {
+	if host == "" {
+		return host
+	}
+	if strings.HasPrefix(host, "[") {
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			return strings.Trim(h, "[]")
+		}
+		return strings.Trim(host, "[]")
+	}
+	if strings.Count(host, ":") == 1 {
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			return h
+		}
+	}
+	return host
+}
+
+func matchHTTPAccessLogWildcard(pattern, value string) bool {
+	if !strings.Contains(pattern, "*") {
+		return pattern == value
+	}
+	parts := strings.Split(pattern, "*")
+	pos := 0
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		idx := strings.Index(value[pos:], part)
+		if idx < 0 {
+			return false
+		}
+		if i == 0 && !strings.HasPrefix(pattern, "*") && idx != 0 {
+			return false
+		}
+		pos += idx + len(part)
+	}
+	last := parts[len(parts)-1]
+	return strings.HasSuffix(pattern, "*") || last == "" || strings.HasSuffix(value, last)
 }
 
 func classifyHTTPAccessLogError(errText string) string {
@@ -487,6 +552,7 @@ func getHTTPAccessLogFile() *os.File {
 		httpAccessLog.backups = backups
 		httpAccessLog.maskKeys = parseHTTPAccessLogSet(beego.AppConfig.String("http_access_log_mask_query_keys"))
 		httpAccessLog.excludes = parseHTTPAccessLogList(beego.AppConfig.String("http_access_log_exclude_paths"))
+		httpAccessLog.hosts = parseHTTPAccessLogList(beego.AppConfig.String("http_access_log_exclude_hosts"))
 		httpAccessLog.minMs = int64(beego.AppConfig.DefaultInt("http_access_log_min_duration_ms", 0))
 		httpAccessLog.fields = parseHTTPAccessLogSet(beego.AppConfig.String("http_access_log_fields"))
 		httpAccessLog.writeCh = make(chan []byte, 4096)
