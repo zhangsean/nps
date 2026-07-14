@@ -28,6 +28,8 @@ import (
 
 var ServerTlsEnable bool = false
 
+const defaultProxyConnectTimeout = 5 * time.Second
+
 type Client struct {
 	tunnel    *nps_mux.Mux
 	signal    *conn.Conn
@@ -46,30 +48,36 @@ func NewClient(t, f *nps_mux.Mux, s *conn.Conn, vs string) *Client {
 }
 
 type Bridge struct {
-	TunnelPort     int //通信隧道端口
-	Client         sync.Map
-	Register       sync.Map
-	tunnelType     string //bridge type kcp or tcp
-	OpenTask       chan *file.Tunnel
-	CloseTask      chan *file.Tunnel
-	CloseClient    chan int
-	SecretChan     chan *conn.Secret
-	ipVerify       bool
-	runList        *sync.Map //map[int]interface{}
-	disconnectTime int
+	TunnelPort          int //通信隧道端口
+	Client              sync.Map
+	Register            sync.Map
+	tunnelType          string //bridge type kcp or tcp
+	OpenTask            chan *file.Tunnel
+	CloseTask           chan *file.Tunnel
+	CloseClient         chan int
+	SecretChan          chan *conn.Secret
+	ipVerify            bool
+	runList             *sync.Map //map[int]interface{}
+	disconnectTime      int
+	proxyConnectTimeout time.Duration
 }
 
-func NewTunnel(tunnelPort int, tunnelType string, ipVerify bool, runList *sync.Map, disconnectTime int) *Bridge {
+func NewTunnel(tunnelPort int, tunnelType string, ipVerify bool, runList *sync.Map, disconnectTime int, proxyConnectTimeoutSeconds int) *Bridge {
+	proxyConnectTimeout := time.Duration(proxyConnectTimeoutSeconds) * time.Second
+	if proxyConnectTimeout <= 0 {
+		proxyConnectTimeout = defaultProxyConnectTimeout
+	}
 	return &Bridge{
-		TunnelPort:     tunnelPort,
-		tunnelType:     tunnelType,
-		OpenTask:       make(chan *file.Tunnel),
-		CloseTask:      make(chan *file.Tunnel),
-		CloseClient:    make(chan int),
-		SecretChan:     make(chan *conn.Secret),
-		ipVerify:       ipVerify,
-		runList:        runList,
-		disconnectTime: disconnectTime,
+		TunnelPort:          tunnelPort,
+		tunnelType:          tunnelType,
+		OpenTask:            make(chan *file.Tunnel),
+		CloseTask:           make(chan *file.Tunnel),
+		CloseClient:         make(chan int),
+		SecretChan:          make(chan *conn.Secret),
+		ipVerify:            ipVerify,
+		runList:             runList,
+		disconnectTime:      disconnectTime,
+		proxyConnectTimeout: proxyConnectTimeout,
 	}
 }
 
@@ -381,7 +389,7 @@ func (s *Bridge) SendLinkInfo(clientId int, link *conn.Link, t *file.Tunnel) (ta
 			err = errors.New("the client connect error")
 			return
 		}
-		if target, err = tunnel.NewConn(); err != nil {
+		if target, err = tunnel.NewConnWithTimeout(s.proxyConnectTimeout); err != nil {
 			return
 		}
 		if t != nil && t.Mode == "file" {

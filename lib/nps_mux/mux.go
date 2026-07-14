@@ -27,6 +27,8 @@ const (
 	// we use 128M, reduce memory usage
 )
 
+const defaultNewConnTimeout = time.Minute * 2
+
 type Mux struct {
 	latency uint64 // we store latency in bits, but it's float64
 	net.Listener
@@ -87,21 +89,30 @@ func NewMux(c net.Conn, connType string, pingCheckThreshold int) *Mux {
 }
 
 func (s *Mux) NewConn() (*conn, error) {
+	return s.NewConnWithTimeout(defaultNewConnTimeout)
+}
+
+func (s *Mux) NewConnWithTimeout(timeout time.Duration) (*conn, error) {
 	if s.IsClose {
 		return nil, errors.New("the mux has closed")
+	}
+	if timeout <= 0 {
+		timeout = defaultNewConnTimeout
 	}
 	conn := NewConn(s.getId(), s)
 	//it must be Set before send
 	s.connMap.Set(conn.connId, conn)
 	s.sendInfo(muxNewConn, conn.connId, nil)
-	//Set a timer timeout 120 second
-	timer := time.NewTimer(time.Minute * 2)
+	//Set a timer timeout
+	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
 	case <-conn.connStatusOkCh:
 		return conn, nil
 	case <-timer.C:
 	}
+	s.connMap.Delete(conn.connId)
+	_ = conn.Close()
 	return nil, errors.New("create connection fail，the server refused the connection")
 }
 
@@ -361,7 +372,7 @@ func (s *Mux) release() {
 	s.newConnQueue.Stop()
 }
 
-//Get New connId as unique flag
+// Get New connId as unique flag
 func (s *Mux) getId() (id int32) {
 	//Avoid going beyond the scope
 	if (math.MaxInt32 - s.id) < 10000 {

@@ -30,3 +30,4 @@ p2p_port|p2p模式开启的udp端口
 pprof_ip|debug pprof 服务端ip
 pprof_port|debug pprof 端口
 disconnect_timeout|客户端连接超时，单位 5s，默认值 60，即 300s = 5mins
+proxy_connect_timeout_seconds|nps 发起代理转发时等待 npc 接受新转发连接的超时时间，直接配置秒数，默认 5；调小可让后端不可达或客户端异常时更快失败

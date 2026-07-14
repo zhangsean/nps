@@ -241,5 +241,6 @@ func run() {
 	if err != nil {
 		timeout = 60
 	}
-	go server.StartNewServer(bridgePort, task, beego.AppConfig.String("bridge_type"), timeout)
+	proxyConnectTimeoutSeconds := beego.AppConfig.DefaultInt("proxy_connect_timeout_seconds", 5)
+	go server.StartNewServer(bridgePort, task, beego.AppConfig.String("bridge_type"), timeout, proxyConnectTimeoutSeconds)
 }

@@ -592,6 +592,13 @@ func TestNewConn(t *testing.T) {
 	log.Println(len(buf), buf[0])
 }
 
+func TestNewConnWithTimeoutClosedMux(t *testing.T) {
+	mux := &Mux{IsClose: true}
+	if conn, err := mux.NewConnWithTimeout(time.Millisecond); err == nil || conn != nil {
+		t.Fatalf("expected closed mux error, got conn=%v err=%v", conn, err)
+	}
+}
+
 func TestDQueue(t *testing.T) {
 	d := new(bufDequeue)
 	d.vals = make([]unsafe.Pointer, 8)
