@@ -26,13 +26,15 @@ https://natnps.com/
 
 
 ## 更新日志
+- 2026-07-14  v0.27.17
+  - **新增**：`nps.conf` 增加 `proxy_connect_timeout_seconds`，可配置 nps 发起代理转发时等待 npc 接受新转发连接的秒数，默认 5 秒，便于后端不可达或客户端异常时快速失败。
+  - **修复**：修复 HTTP/HTTPS 代理 Host 未匹配或连接目标后端失败并返回 404 时未写入访问日志的问题。
+
 - 2026-07-13  v0.27.16
   - **新增**：`npc` 支持通过 `-cip_url`、环境变量 `NPC_CIP_URL` 或 `npc.conf` 的 `cip_url` 定时获取公网 IP，并在 IP 变化时自动上报到服务端；默认接口为 `http://www.3322.org/dyndns/getip`，默认检测频率为 1 小时，响应内容会用正则提取 IPv4 地址以兼容非纯 IP 文本。
   - **新增**：`nps.conf` 增加 `http_access_log_path`，HTTP/HTTPS 代理请求会以 JSON Lines 写入独立访问日志文件，记录时间戳、请求方法、URL、响应状态码、请求/响应字节数和处理耗时，并支持异步写入、按大小轮转压缩、路径排除、慢请求阈值、query 脱敏和字段白名单，便于 Promtail/Loki 采集。
   - **新增**：HTTP/HTTPS 访问日志增加 `http_access_log_exclude_hosts`，支持按 Host 过滤日志，支持 `*.example.com` 这类通配，未配置端口时可匹配带端口的请求 Host。
-  - **新增**：`nps.conf` 增加 `proxy_connect_timeout_seconds`，可配置 nps 发起代理转发时等待 npc 接受新转发连接的秒数，默认 5 秒，便于后端不可达或客户端异常时快速失败。
   - **修复**：修复 nps Docker 镜像缺少时区数据库导致无法识别 `Asia/Shanghai`、日志时间不符合当前时区的问题。
-  - **修复**：修复 HTTP/HTTPS 代理 Host 未匹配或连接目标后端失败并返回 404 时未写入访问日志的问题。
 
 - 2026-07-07  v0.27.15
   - **新增**：客户端列表支持手动刷新公网 IP 归属地，刷新结果会写入持久化缓存，便于修正第三方接口返回的错误地域。
