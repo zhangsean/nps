@@ -115,6 +115,7 @@ func (s *httpServer) handleTunneling(w http.ResponseWriter, r *http.Request) {
 	}
 	host, err = file.GetDb().GetInfoByHost(r.Host, r)
 	if err != nil {
+		s.finishHTTPNotFoundAccessLog(r, getRequestRemoteAddr(r, ""), err.Error())
 		if isEmptyRequestHost(r) {
 			s.writeHttpNotFound(w, r)
 			return
@@ -163,6 +164,7 @@ func (s *httpServer) handleHttp(c *conn.Conn, r *http.Request) {
 		wg         sync.WaitGroup
 		remoteAddr string
 		accessLogs []*httpAccessLogRecord
+		accessLog  *httpAccessLogRecord
 	)
 	defer func() {
 		if connClient != nil {
@@ -194,6 +196,11 @@ reset:
 	}
 
 	if host, err = file.GetDb().GetInfoByHost(r.Host, r); err != nil {
+		accessLog = newHTTPAccessLogRecord(r, remoteAddr, nil, "", false)
+		accessLog.SetStatusCode(http.StatusNotFound)
+		accessLog.SetRequestBytes(estimateHTTPAccessLogRequestBytes(r))
+		accessLog.SetResponseBytes(s.connectionFailResponseBytes())
+		accessLog.Finish(err.Error())
 		if isEmptyRequestHost(r) {
 			c.Close()
 			return
@@ -202,8 +209,13 @@ reset:
 		c.Close()
 		return
 	}
+	accessLog = newHTTPAccessLogRecord(r, remoteAddr, host, "", false)
+	accessLog.SetRequestBytes(estimateHTTPAccessLogRequestBytes(r))
 
 	if err := s.CheckFlowAndConnNum(host.Client); err != nil {
+		accessLog.SetStatusCode(http.StatusNotFound)
+		accessLog.SetResponseBytes(s.connectionFailResponseBytes())
+		accessLog.Finish(err.Error())
 		logs.Warn("client id %d, host id %d, error %s, when https connection", host.Client.Id, host.Id, err.Error())
 		c.Close()
 		return
@@ -212,22 +224,35 @@ reset:
 		defer host.Client.AddConn()
 	}
 	if err = s.auth(r, c, host.Client.Cnf.U, host.Client.Cnf.P); err != nil {
+		accessLog.SetStatusCode(http.StatusUnauthorized)
+		accessLog.SetResponseBytes(int64(len(common.UnauthorizedBytes)))
+		accessLog.Finish(err.Error())
 		logs.Warn("auth error", err, r.RemoteAddr)
 		return
 	}
 	if targetAddr, err = host.Target.GetRandomTarget(); err != nil {
+		accessLog.SetStatusCode(http.StatusNotFound)
+		accessLog.SetResponseBytes(s.connectionFailResponseBytes())
+		accessLog.Finish(err.Error())
 		logs.Warn(err.Error())
 		return
 	}
+	accessLog.SetTarget(targetAddr)
 
 	// 判断访问地址是否在黑名单内
 	if common.IsBlackIp(c.RemoteAddr().String(), host.Client.VerifyKey, host.Client.BlackIpList) {
+		accessLog.SetStatusCode(http.StatusNotFound)
+		accessLog.SetResponseBytes(s.connectionFailResponseBytes())
+		accessLog.Finish("black ip")
 		c.Close()
 		return
 	}
 
 	lk = conn.NewLink("http", targetAddr, host.Client.Cnf.Crypt, host.Client.Cnf.Compress, r.RemoteAddr, host.Target.LocalProxy)
 	if target, err = s.bridge.SendLinkInfo(host.Client.Id, lk, nil); err != nil {
+		accessLog.SetStatusCode(http.StatusNotFound)
+		accessLog.SetResponseBytes(s.connectionFailResponseBytes())
+		accessLog.Finish(err.Error())
 		logs.Notice("connect to target %s error %s", lk.Host, err)
 		return
 	}
@@ -272,19 +297,25 @@ reset:
 	}()
 
 	for {
-		accessLog := newHTTPAccessLogRecord(r, remoteAddr, host, lk.Host, false)
-		accessLog.SetRequestBytes(estimateHTTPAccessLogRequestBytes(r))
+		currentAccessLog := accessLog
+		if currentAccessLog == nil {
+			currentAccessLog = newHTTPAccessLogRecord(r, remoteAddr, host, lk.Host, false)
+			currentAccessLog.SetRequestBytes(estimateHTTPAccessLogRequestBytes(r))
+		} else {
+			currentAccessLog.SetTarget(lk.Host)
+			accessLog = nil
+		}
 		//if the cache start and the request is in the cache list, return the cache
 		if s.useCache {
 			if v, ok := s.cache.Get(filepath.Join(host.Host, r.URL.Path)); ok {
 				n, err := c.Write(v.([]byte))
 				if err != nil {
-					accessLog.Finish(err.Error())
+					currentAccessLog.Finish(err.Error())
 					break
 				}
-				accessLog.SetStatusCode(http.StatusOK)
-				accessLog.SetResponseBytes(int64(n))
-				accessLog.Finish("")
+				currentAccessLog.SetStatusCode(http.StatusOK)
+				currentAccessLog.SetResponseBytes(int64(n))
+				currentAccessLog.Finish("")
 				logs.Trace("%s request, method %s, host %s, url %s, remote address %s, return cache", r.URL.Scheme, r.Method, r.Host, r.URL.Path, c.RemoteAddr().String())
 				host.Client.Flow.Add(int64(n), int64(n))
 				//if return cache and does not create a new conn with client and Connection is not set or close, close the connection.
@@ -296,20 +327,20 @@ reset:
 		}
 
 		//change the host and header and set proxy setting
-		accessLogs = append(accessLogs, accessLog)
+		accessLogs = append(accessLogs, currentAccessLog)
 		common.ChangeHostAndHeader(r, host.HostChange, host.HeaderChange, c.Conn.RemoteAddr().String())
 		logs.Trace("Request: %s %s://%s%s, remote addr %s, remote target %s", r.Method, r.URL.Scheme, r.Host, r.URL.Path, c.RemoteAddr().String(), lk.Host)
 		//write
 		lenConn = conn.NewLenConn(connClient)
 		//lenConn = conn.LenConn
 		if err := r.Write(lenConn); err != nil {
-			accessLog.SetRequestBytes(int64(lenConn.Len))
-			accessLog.Finish(err.Error())
+			currentAccessLog.SetRequestBytes(int64(lenConn.Len))
+			currentAccessLog.Finish(err.Error())
 			logs.Error("Request write error:", err)
 			break
 		}
-		accessLog.SetRequestBytes(int64(lenConn.Len))
-		pendingResponses <- pendingHTTPResponseLog{request: r, accessLog: accessLog}
+		currentAccessLog.SetRequestBytes(int64(lenConn.Len))
+		pendingResponses <- pendingHTTPResponseLog{request: r, accessLog: currentAccessLog}
 		host.Client.Flow.Add(int64(lenConn.Len), int64(lenConn.Len))
 
 	readReq:
@@ -325,6 +356,7 @@ reset:
 		//What happened ，Why one character less???
 		r.Method = resetReqMethod(r.Method)
 		if hostTmp, err := file.GetDb().GetInfoByHost(r.Host, r); err != nil {
+			s.finishHTTPNotFoundAccessLogWithBytes(r, remoteAddr, estimateHTTPAccessLogRequestBytes(r), 0, err.Error())
 			if isEmptyRequestHost(r) {
 				break
 			}
@@ -391,6 +423,29 @@ func (s *httpServer) writeHttpNotFound(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodHead {
 		_, _ = w.Write(s.errorContent)
 	}
+}
+
+func (s *httpServer) finishHTTPNotFoundAccessLog(r *http.Request, remoteAddr string, errText string) {
+	responseBytes := int64(0)
+	if r == nil || r.Method != http.MethodHead {
+		responseBytes = int64(len(s.errorContent))
+	}
+	s.finishHTTPNotFoundAccessLogWithBytes(r, remoteAddr, estimateHTTPAccessLogRequestBytes(r), responseBytes, errText)
+}
+
+func (s *httpServer) finishHTTPNotFoundAccessLogWithBytes(r *http.Request, remoteAddr string, requestBytes int64, responseBytes int64, errText string) {
+	if errText == "" {
+		errText = "host not matched"
+	}
+	accessLog := newHTTPAccessLogRecord(r, remoteAddr, nil, "", false)
+	accessLog.SetStatusCode(http.StatusNotFound)
+	accessLog.SetRequestBytes(requestBytes)
+	accessLog.SetResponseBytes(responseBytes)
+	accessLog.Finish(errText)
+}
+
+func (s *httpServer) connectionFailResponseBytes() int64 {
+	return int64(len(common.ConnectionFailBytes) + len(s.errorContent))
 }
 
 func (s *httpServer) NewServer(port int, scheme string) *http.Server {

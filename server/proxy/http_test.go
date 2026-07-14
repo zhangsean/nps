@@ -48,6 +48,16 @@ func TestWriteHttpNotFound(t *testing.T) {
 	}
 }
 
+func TestConnectionFailResponseBytes(t *testing.T) {
+	server := &httpServer{
+		BaseServer: BaseServer{errorContent: []byte("nps 404")},
+	}
+	want := int64(len(common.ConnectionFailBytes) + len("nps 404"))
+	if got := server.connectionFailResponseBytes(); got != want {
+		t.Fatalf("unexpected connection fail response bytes %d, want %d", got, want)
+	}
+}
+
 func TestBuildHTTPAccessLogLine(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "http://example.com/api/list?keyword=nps&page=1", nil)
 	request.RequestURI = "/api/list?keyword=nps&page=1"
@@ -86,6 +96,76 @@ func TestBuildHTTPAccessLogLine(t *testing.T) {
 	}
 	if strings.Contains(string(line), `"path"`) {
 		t.Fatalf("path should be logged as url: %s", string(line))
+	}
+}
+
+func TestBuildHTTPAccessLogLineForUnmatchedHost(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "http://missing.example.com/not-found?id=1", nil)
+	request.RequestURI = "/not-found?id=1"
+	request.RemoteAddr = "10.0.0.3:12345"
+	record := newHTTPAccessLogRecord(request, getRequestRemoteAddr(request, ""), nil, "", false)
+	record.entry.Timestamp = "2026-07-13 10:11:12.013"
+	record.entry.StatusCode = http.StatusNotFound
+	record.entry.DurationMS = 7
+	record.entry.Error = "host not matched"
+	record.entry.ErrorType = classifyHTTPAccessLogError(record.entry.Error)
+
+	line, err := buildHTTPAccessLogLine(record.entry)
+	if err != nil {
+		t.Fatalf("build log line error: %v", err)
+	}
+
+	var entry httpAccessLogEntry
+	if err := json.Unmarshal(line, &entry); err != nil {
+		t.Fatalf("log line is not json: %v", err)
+	}
+	if entry.StatusCode != http.StatusNotFound {
+		t.Fatalf("unexpected status code %d", entry.StatusCode)
+	}
+	if entry.Host != "missing.example.com" {
+		t.Fatalf("unexpected host %q", entry.Host)
+	}
+	if entry.URL != "/not-found?id=1" {
+		t.Fatalf("unexpected url %q", entry.URL)
+	}
+	if entry.HostID != 0 || entry.ClientID != 0 {
+		t.Fatalf("unmatched host should not include host/client id, got %d/%d", entry.HostID, entry.ClientID)
+	}
+}
+
+func TestBuildHTTPSAccessLogLineForUnmatchedHost(t *testing.T) {
+	request := buildHttpsRequest("missing.example.com")
+	record := newHTTPAccessLogRecord(request, "10.0.0.4:44321", nil, "", true)
+	record.entry.Timestamp = "2026-07-13 10:11:12.014"
+	record.entry.StatusCode = http.StatusNotFound
+	record.entry.RequestBytes = 128
+	record.entry.DurationMS = 5
+	record.entry.Error = "host not matched"
+	record.entry.ErrorType = classifyHTTPAccessLogError(record.entry.Error)
+
+	line, err := buildHTTPAccessLogLine(record.entry)
+	if err != nil {
+		t.Fatalf("build log line error: %v", err)
+	}
+
+	var entry httpAccessLogEntry
+	if err := json.Unmarshal(line, &entry); err != nil {
+		t.Fatalf("log line is not json: %v", err)
+	}
+	if entry.Method != http.MethodConnect {
+		t.Fatalf("unexpected method %q", entry.Method)
+	}
+	if entry.Scheme != "https" || entry.Host != "missing.example.com" {
+		t.Fatalf("unexpected scheme/host %q/%q", entry.Scheme, entry.Host)
+	}
+	if entry.StatusCode != http.StatusNotFound {
+		t.Fatalf("unexpected status code %d", entry.StatusCode)
+	}
+	if entry.RequestBytes != 128 {
+		t.Fatalf("unexpected request bytes %d", entry.RequestBytes)
+	}
+	if entry.HostID != 0 || entry.ClientID != 0 {
+		t.Fatalf("unmatched host should not include host/client id, got %d/%d", entry.HostID, entry.ClientID)
 	}
 }
 

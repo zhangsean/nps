@@ -128,6 +128,12 @@ func (record *httpAccessLogRecord) SetStatusCode(statusCode int) {
 	}
 }
 
+func (record *httpAccessLogRecord) SetTarget(target string) {
+	if record != nil {
+		record.entry.Target = target
+	}
+}
+
 func (record *httpAccessLogRecord) SetRequestBytes(requestBytes int64) {
 	if record != nil {
 		record.entry.RequestBytes = requestBytes

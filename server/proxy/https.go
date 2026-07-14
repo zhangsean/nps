@@ -39,6 +39,7 @@ func (https *HttpsServer) Start() error {
 		serverName, rb := GetServerNameFromClientHello(c)
 		r := buildHttpsRequest(serverName)
 		if host, err := file.GetDb().GetInfoByHost(serverName, r); err != nil {
+			https.finishHTTPNotFoundAccessLogWithBytes(r, c.RemoteAddr().String(), int64(len(rb)), 0, err.Error())
 			c.Close()
 			if isEmptyHostName(serverName) {
 				return
@@ -124,6 +125,7 @@ func (https *HttpsServer) handleHttps2(c net.Conn, hostName string, rb []byte, r
 	var host *file.Host
 	var err error
 	if host, err = file.GetDb().GetInfoByHost(hostName, r); err != nil {
+		https.finishHTTPNotFoundAccessLogWithBytes(r, c.RemoteAddr().String(), int64(len(rb)), 0, err.Error())
 		c.Close()
 		if isEmptyHostName(hostName) {
 			return
@@ -176,6 +178,7 @@ func (https *HttpsServer) handleHttps(c net.Conn) {
 	var host *file.Host
 	var err error
 	if host, err = file.GetDb().GetInfoByHost(hostName, r); err != nil {
+		https.finishHTTPNotFoundAccessLogWithBytes(r, c.RemoteAddr().String(), int64(len(rb)), 0, err.Error())
 		c.Close()
 		if isEmptyHostName(hostName) {
 			return
