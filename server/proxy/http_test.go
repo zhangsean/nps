@@ -323,15 +323,21 @@ func TestHTTPAccessLogSkipAndErrorType(t *testing.T) {
 	oldMinMs := httpAccessLog.minMs
 	oldExcludes := httpAccessLog.excludes
 	oldHosts := httpAccessLog.hosts
+	oldErrors := httpAccessLog.errors
+	oldErrTypes := httpAccessLog.errTypes
 	httpAccessLog.disabled = false
 	httpAccessLog.minMs = 100
 	httpAccessLog.excludes = []string{"/health", "/static/*"}
 	httpAccessLog.hosts = []string{"localhost", "*.internal.test", "api.example.com:8080"}
+	httpAccessLog.errors = []string{"The host could not be parsed"}
+	httpAccessLog.errTypes = map[string]struct{}{"host_parse_error": {}}
 	t.Cleanup(func() {
 		httpAccessLog.disabled = oldDisabled
 		httpAccessLog.minMs = oldMinMs
 		httpAccessLog.excludes = oldExcludes
 		httpAccessLog.hosts = oldHosts
+		httpAccessLog.errors = oldErrors
+		httpAccessLog.errTypes = oldErrTypes
 	})
 
 	record := &httpAccessLogRecord{
@@ -360,11 +366,29 @@ func TestHTTPAccessLogSkipAndErrorType(t *testing.T) {
 	if !shouldSkipHTTPAccessLog(record) {
 		t.Fatalf("excluded host with port should be skipped")
 	}
+	record.entry.Host = ""
+	record.entry.Error = "The host could not be parsed"
+	if !shouldSkipHTTPAccessLog(record) {
+		t.Fatalf("excluded error should be skipped")
+	}
+	record.entry.Error = ""
+	record.entry.ErrorType = "host_parse_error"
+	if !shouldSkipHTTPAccessLog(record) {
+		t.Fatalf("excluded error type should be skipped")
+	}
 	if got := classifyHTTPAccessLogError("write tcp: broken pipe"); got != "client_closed" {
 		t.Fatalf("unexpected error type %q", got)
 	}
 	if got := classifyHTTPAccessLogError("i/o timeout"); got != "timeout" {
 		t.Fatalf("unexpected timeout error type %q", got)
+	}
+	if got := classifyHTTPAccessLogError("The host could not be parsed"); got != "host_parse_error" {
+		t.Fatalf("unexpected host parse error type %q", got)
+	}
+	record.entry.Host = "missing.example.com"
+	record.entry.Error = "The host could not be parsed"
+	if got := classifyHTTPAccessLogRecordError(record); got != "host_not_matched" {
+		t.Fatalf("unexpected host match error type %q", got)
 	}
 }
 

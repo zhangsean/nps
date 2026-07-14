@@ -29,6 +29,7 @@ https://natnps.com/
 - 未发布
 
 - 2026-07-14  v0.27.17
+  - **新增**：HTTP/HTTPS 访问日志增加 `http_access_log_exclude_errors` 和 `http_access_log_exclude_error_types`，支持按错误文本或错误类型过滤无效 CONNECT 扫描等噪声日志。
   - **新增**：`nps.conf` 增加 `client_connect_timeout_seconds`，可配置 nps 发起代理转发时等待 npc 接受新转发连接的秒数，默认 5 秒，便于后端不可达或客户端异常时快速失败。
   - **新增**：`nps.conf` 增加 `target_connect_timeout_seconds` 和 `target_connect_retry_count`，支持 npc 连接目标服务器失败或超时时按目标连接超时和重试次数配置重试并记录重试日志，默认重试 1 次，配置 0 可关闭。
   - **修复**：修复 HTTP/HTTPS 代理 Host 未匹配或连接目标后端失败并返回 404 时未写入访问日志的问题。

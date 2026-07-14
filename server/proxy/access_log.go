@@ -65,6 +65,8 @@ var httpAccessLog = struct {
 	maskKeys map[string]struct{}
 	excludes []string
 	hosts    []string
+	errors   []string
+	errTypes map[string]struct{}
 	minMs    int64
 	fields   map[string]struct{}
 	initErr  error
@@ -153,7 +155,7 @@ func (record *httpAccessLogRecord) Finish(errText string) {
 	record.once.Do(func() {
 		record.entry.DurationMS = time.Since(record.start).Milliseconds()
 		record.entry.Error = errText
-		record.entry.ErrorType = classifyHTTPAccessLogError(errText)
+		record.entry.ErrorType = classifyHTTPAccessLogRecordError(record)
 		if shouldSkipHTTPAccessLog(record) {
 			return
 		}
@@ -358,6 +360,16 @@ func shouldSkipHTTPAccessLog(record *httpAccessLogRecord) bool {
 			return true
 		}
 	}
+	for _, pattern := range httpAccessLog.errors {
+		if matchHTTPAccessLogError(pattern, record.entry.Error) {
+			return true
+		}
+	}
+	if len(httpAccessLog.errTypes) > 0 && record.entry.ErrorType != "" {
+		if _, ok := httpAccessLog.errTypes[strings.ToLower(record.entry.ErrorType)]; ok {
+			return true
+		}
+	}
 	return false
 }
 
@@ -407,6 +419,15 @@ func stripHTTPAccessLogHostPort(host string) string {
 	return host
 }
 
+func matchHTTPAccessLogError(pattern, errText string) bool {
+	pattern = strings.ToLower(strings.TrimSpace(pattern))
+	errText = strings.ToLower(strings.TrimSpace(errText))
+	if pattern == "" || errText == "" {
+		return false
+	}
+	return matchHTTPAccessLogWildcard(pattern, errText)
+}
+
 func matchHTTPAccessLogWildcard(pattern, value string) bool {
 	if !strings.Contains(pattern, "*") {
 		return pattern == value
@@ -436,6 +457,8 @@ func classifyHTTPAccessLogError(errText string) string {
 	}
 	lower := strings.ToLower(errText)
 	switch {
+	case strings.Contains(lower, "host could not be parsed"):
+		return "host_parse_error"
 	case strings.Contains(lower, "timeout"):
 		return "timeout"
 	case strings.Contains(lower, "broken pipe"),
@@ -452,6 +475,20 @@ func classifyHTTPAccessLogError(errText string) string {
 	default:
 		return "proxy_error"
 	}
+}
+
+func classifyHTTPAccessLogRecordError(record *httpAccessLogRecord) string {
+	if record == nil {
+		return ""
+	}
+	errorType := classifyHTTPAccessLogError(record.entry.Error)
+	if errorType != "host_parse_error" {
+		return errorType
+	}
+	if strings.TrimSpace(record.entry.Host) != "" {
+		return "host_not_matched"
+	}
+	return errorType
 }
 
 func parseHTTPAccessLogSet(s string) map[string]struct{} {
@@ -559,6 +596,8 @@ func getHTTPAccessLogFile() *os.File {
 		httpAccessLog.maskKeys = parseHTTPAccessLogSet(beego.AppConfig.String("http_access_log_mask_query_keys"))
 		httpAccessLog.excludes = parseHTTPAccessLogList(beego.AppConfig.String("http_access_log_exclude_paths"))
 		httpAccessLog.hosts = parseHTTPAccessLogList(beego.AppConfig.String("http_access_log_exclude_hosts"))
+		httpAccessLog.errors = parseHTTPAccessLogList(beego.AppConfig.String("http_access_log_exclude_errors"))
+		httpAccessLog.errTypes = parseHTTPAccessLogSet(beego.AppConfig.String("http_access_log_exclude_error_types"))
 		httpAccessLog.minMs = int64(beego.AppConfig.DefaultInt("http_access_log_min_duration_ms", 0))
 		httpAccessLog.fields = parseHTTPAccessLogSet(beego.AppConfig.String("http_access_log_fields"))
 		httpAccessLog.writeCh = make(chan []byte, 4096)
