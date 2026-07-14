@@ -1,6 +1,7 @@
 package client
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -41,6 +42,29 @@ func TestNewRPClientDefaultCipQuery(t *testing.T) {
 	if client.cipInterval != time.Duration(DefaultCipInterval)*time.Second {
 		t.Fatalf("expected default cip interval %d seconds, got %s", DefaultCipInterval, client.cipInterval)
 	}
+}
+
+func TestDialTargetWithRetrySuccess(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen error: %v", err)
+	}
+	defer listener.Close()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		conn, err := listener.Accept()
+		if err == nil {
+			_ = conn.Close()
+		}
+	}()
+
+	conn, err := dialTargetWithRetry("tcp", listener.Addr().String(), time.Second, 1)
+	if err != nil {
+		t.Fatalf("dialTargetWithRetry returned error: %v", err)
+	}
+	_ = conn.Close()
+	<-done
 }
 
 func TestExtractPublicCipResponseSkipsInvalidCandidates(t *testing.T) {

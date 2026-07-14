@@ -28,8 +28,9 @@ import (
 
 var ServerTlsEnable bool = false
 
-const defaultProxyConnectTimeout = 5 * time.Second
-const defaultProxyConnectRetryCount = 1
+const defaultClientConnectTimeout = 5 * time.Second
+const defaultTargetConnectTimeout = 5 * time.Second
+const defaultTargetConnectRetryCount = 1
 
 type Client struct {
 	tunnel    *nps_mux.Mux
@@ -49,41 +50,47 @@ func NewClient(t, f *nps_mux.Mux, s *conn.Conn, vs string) *Client {
 }
 
 type Bridge struct {
-	TunnelPort             int //通信隧道端口
-	Client                 sync.Map
-	Register               sync.Map
-	tunnelType             string //bridge type kcp or tcp
-	OpenTask               chan *file.Tunnel
-	CloseTask              chan *file.Tunnel
-	CloseClient            chan int
-	SecretChan             chan *conn.Secret
-	ipVerify               bool
-	runList                *sync.Map //map[int]interface{}
-	disconnectTime         int
-	proxyConnectTimeout    time.Duration
-	proxyConnectRetryCount int
+	TunnelPort              int //通信隧道端口
+	Client                  sync.Map
+	Register                sync.Map
+	tunnelType              string //bridge type kcp or tcp
+	OpenTask                chan *file.Tunnel
+	CloseTask               chan *file.Tunnel
+	CloseClient             chan int
+	SecretChan              chan *conn.Secret
+	ipVerify                bool
+	runList                 *sync.Map //map[int]interface{}
+	disconnectTime          int
+	clientConnectTimeout    time.Duration
+	targetConnectTimeout    time.Duration
+	targetConnectRetryCount int
 }
 
-func NewTunnel(tunnelPort int, tunnelType string, ipVerify bool, runList *sync.Map, disconnectTime int, proxyConnectTimeoutSeconds int, proxyConnectRetryCount int) *Bridge {
-	proxyConnectTimeout := time.Duration(proxyConnectTimeoutSeconds) * time.Second
-	if proxyConnectTimeout <= 0 {
-		proxyConnectTimeout = defaultProxyConnectTimeout
+func NewTunnel(tunnelPort int, tunnelType string, ipVerify bool, runList *sync.Map, disconnectTime int, clientConnectTimeoutSeconds int, targetConnectTimeoutSeconds int, targetConnectRetryCount int) *Bridge {
+	clientConnectTimeout := time.Duration(clientConnectTimeoutSeconds) * time.Second
+	if clientConnectTimeout <= 0 {
+		clientConnectTimeout = defaultClientConnectTimeout
 	}
-	if proxyConnectRetryCount < 0 {
-		proxyConnectRetryCount = defaultProxyConnectRetryCount
+	targetConnectTimeout := time.Duration(targetConnectTimeoutSeconds) * time.Second
+	if targetConnectTimeout <= 0 {
+		targetConnectTimeout = defaultTargetConnectTimeout
+	}
+	if targetConnectRetryCount < 0 {
+		targetConnectRetryCount = defaultTargetConnectRetryCount
 	}
 	return &Bridge{
-		TunnelPort:             tunnelPort,
-		tunnelType:             tunnelType,
-		OpenTask:               make(chan *file.Tunnel),
-		CloseTask:              make(chan *file.Tunnel),
-		CloseClient:            make(chan int),
-		SecretChan:             make(chan *conn.Secret),
-		ipVerify:               ipVerify,
-		runList:                runList,
-		disconnectTime:         disconnectTime,
-		proxyConnectTimeout:    proxyConnectTimeout,
-		proxyConnectRetryCount: proxyConnectRetryCount,
+		TunnelPort:              tunnelPort,
+		tunnelType:              tunnelType,
+		OpenTask:                make(chan *file.Tunnel),
+		CloseTask:               make(chan *file.Tunnel),
+		CloseClient:             make(chan int),
+		SecretChan:              make(chan *conn.Secret),
+		ipVerify:                ipVerify,
+		runList:                 runList,
+		disconnectTime:          disconnectTime,
+		clientConnectTimeout:    clientConnectTimeout,
+		targetConnectTimeout:    targetConnectTimeout,
+		targetConnectRetryCount: targetConnectRetryCount,
 	}
 }
 
@@ -395,7 +402,7 @@ func (s *Bridge) SendLinkInfo(clientId int, link *conn.Link, t *file.Tunnel) (ta
 			err = errors.New("the client connect error")
 			return
 		}
-		if target, err = s.newProxyConnWithRetry(tunnel, clientId, link.Host); err != nil {
+		if target, err = tunnel.NewConnWithTimeout(s.clientConnectTimeout); err != nil {
 			return
 		}
 		if t != nil && t.Mode == "file" {
@@ -404,6 +411,8 @@ func (s *Bridge) SendLinkInfo(clientId int, link *conn.Link, t *file.Tunnel) (ta
 			link.Compress = false
 			return
 		}
+		link.Option.Timeout = s.targetConnectTimeout
+		link.Option.RetryCount = s.targetConnectRetryCount
 		if _, err = conn.NewConn(target).SendInfo(link, ""); err != nil {
 			logs.Info("new connect error ,the target %s refuse to connect", link.Host)
 			return
@@ -412,27 +421,6 @@ func (s *Bridge) SendLinkInfo(clientId int, link *conn.Link, t *file.Tunnel) (ta
 		err = errors.New(fmt.Sprintf("the client %d is not connect", clientId))
 	}
 	return
-}
-
-func (s *Bridge) newProxyConnWithRetry(tunnel *nps_mux.Mux, clientId int, targetHost string) (target net.Conn, err error) {
-	attempts := s.proxyConnectRetryCount + 1
-	if attempts < 1 {
-		attempts = 1
-	}
-	for attempt := 1; attempt <= attempts; attempt++ {
-		target, err = tunnel.NewConnWithTimeout(s.proxyConnectTimeout)
-		if err == nil {
-			if attempt > 1 {
-				logs.Info("proxy connect retry success, client id %d, target %s, attempt %d/%d", clientId, targetHost, attempt, attempts)
-			}
-			return target, nil
-		}
-		if !errors.Is(err, nps_mux.ErrNewConnTimeout) || attempt == attempts {
-			return nil, err
-		}
-		logs.Warn("proxy connect timeout, client id %d, target %s, attempt %d/%d, timeout %s, retry next, error %s", clientId, targetHost, attempt, attempts, s.proxyConnectTimeout, err.Error())
-	}
-	return nil, err
 }
 
 func (s *Bridge) ping() {

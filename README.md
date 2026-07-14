@@ -27,10 +27,10 @@ https://natnps.com/
 
 ## 更新日志
 - 未发布
-  - **新增**：`nps.conf` 增加 `proxy_connect_retry_count`，支持 nps 发起代理转发连接超时时按配置重试并记录重试日志，默认重试 1 次，配置 0 可关闭。
 
 - 2026-07-14  v0.27.17
-  - **新增**：`nps.conf` 增加 `proxy_connect_timeout_seconds`，可配置 nps 发起代理转发时等待 npc 接受新转发连接的秒数，默认 5 秒，便于后端不可达或客户端异常时快速失败。
+  - **新增**：`nps.conf` 增加 `client_connect_timeout_seconds`，可配置 nps 发起代理转发时等待 npc 接受新转发连接的秒数，默认 5 秒，便于后端不可达或客户端异常时快速失败。
+  - **新增**：`nps.conf` 增加 `target_connect_timeout_seconds` 和 `target_connect_retry_count`，支持 npc 连接目标服务器失败或超时时按目标连接超时和重试次数配置重试并记录重试日志，默认重试 1 次，配置 0 可关闭。
   - **修复**：修复 HTTP/HTTPS 代理 Host 未匹配或连接目标后端失败并返回 404 时未写入访问日志的问题。
 
 - 2026-07-13  v0.27.16

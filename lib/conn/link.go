@@ -27,7 +27,8 @@ type Link struct {
 type Option func(*Options)
 
 type Options struct {
-	Timeout time.Duration
+	Timeout    time.Duration
+	RetryCount int
 }
 
 var defaultTimeOut = time.Second * 5
@@ -59,5 +60,11 @@ func newOptions(opts ...Option) Options {
 func LinkTimeout(t time.Duration) Option {
 	return func(opt *Options) {
 		opt.Timeout = t
+	}
+}
+
+func LinkRetryCount(retryCount int) Option {
+	return func(opt *Options) {
+		opt.RetryCount = retryCount
 	}
 }

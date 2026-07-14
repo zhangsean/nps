@@ -6,22 +6,28 @@ import (
 	"time"
 )
 
-func TestNewTunnelProxyConnectRetryConfig(t *testing.T) {
-	tunnel := NewTunnel(0, "tcp", false, &sync.Map{}, 60, 3, 0)
-	if tunnel.proxyConnectTimeout != 3*time.Second {
-		t.Fatalf("unexpected proxy connect timeout %s", tunnel.proxyConnectTimeout)
+func TestNewTunnelTargetConnectRetryConfig(t *testing.T) {
+	tunnel := NewTunnel(0, "tcp", false, &sync.Map{}, 60, 3, 4, 0)
+	if tunnel.clientConnectTimeout != 3*time.Second {
+		t.Fatalf("unexpected client connect timeout %s", tunnel.clientConnectTimeout)
 	}
-	if tunnel.proxyConnectRetryCount != 0 {
-		t.Fatalf("unexpected proxy connect retry count %d", tunnel.proxyConnectRetryCount)
+	if tunnel.targetConnectTimeout != 4*time.Second {
+		t.Fatalf("unexpected target connect timeout %s", tunnel.targetConnectTimeout)
+	}
+	if tunnel.targetConnectRetryCount != 0 {
+		t.Fatalf("unexpected target connect retry count %d", tunnel.targetConnectRetryCount)
 	}
 }
 
-func TestNewTunnelProxyConnectRetryDefault(t *testing.T) {
-	tunnel := NewTunnel(0, "tcp", false, &sync.Map{}, 60, 0, -1)
-	if tunnel.proxyConnectTimeout != defaultProxyConnectTimeout {
-		t.Fatalf("unexpected default proxy connect timeout %s", tunnel.proxyConnectTimeout)
+func TestNewTunnelTargetConnectRetryDefault(t *testing.T) {
+	tunnel := NewTunnel(0, "tcp", false, &sync.Map{}, 60, 0, 0, -1)
+	if tunnel.clientConnectTimeout != defaultClientConnectTimeout {
+		t.Fatalf("unexpected default client connect timeout %s", tunnel.clientConnectTimeout)
 	}
-	if tunnel.proxyConnectRetryCount != defaultProxyConnectRetryCount {
-		t.Fatalf("unexpected default proxy connect retry count %d", tunnel.proxyConnectRetryCount)
+	if tunnel.targetConnectTimeout != defaultTargetConnectTimeout {
+		t.Fatalf("unexpected default target connect timeout %s", tunnel.targetConnectTimeout)
+	}
+	if tunnel.targetConnectRetryCount != defaultTargetConnectRetryCount {
+		t.Fatalf("unexpected default target connect retry count %d", tunnel.targetConnectRetryCount)
 	}
 }

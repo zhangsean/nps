@@ -86,8 +86,8 @@ func DealBridgeTask() {
 }
 
 // start a new server
-func StartNewServer(bridgePort int, cnf *file.Tunnel, bridgeType string, bridgeDisconnect int, proxyConnectTimeout int, proxyConnectRetryCount int) {
-	Bridge = bridge.NewTunnel(bridgePort, bridgeType, common.GetBoolByStr(beego.AppConfig.String("ip_limit")), &RunList, bridgeDisconnect, proxyConnectTimeout, proxyConnectRetryCount)
+func StartNewServer(bridgePort int, cnf *file.Tunnel, bridgeType string, bridgeDisconnect int, clientConnectTimeout int, targetConnectTimeout int, targetConnectRetryCount int) {
+	Bridge = bridge.NewTunnel(bridgePort, bridgeType, common.GetBoolByStr(beego.AppConfig.String("ip_limit")), &RunList, bridgeDisconnect, clientConnectTimeout, targetConnectTimeout, targetConnectRetryCount)
 	go func() {
 		if err := Bridge.StartTunnel(); err != nil {
 			logs.Error("start server bridge error", err)

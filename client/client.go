@@ -295,7 +295,7 @@ func (s *TRPClient) handleChan(src net.Conn) {
 	lk.Host = common.FormatAddress(lk.Host)
 	//if Conn type is http, read the request and log
 	if lk.ConnType == "http" {
-		if targetConn, err := net.DialTimeout(common.CONN_TCP, lk.Host, lk.Option.Timeout); err != nil {
+		if targetConn, err := dialTargetWithRetry(common.CONN_TCP, lk.Host, lk.Option.Timeout, lk.Option.RetryCount); err != nil {
 			logs.Warn("connect to %s error %s", lk.Host, err.Error())
 			src.Close()
 		} else {
@@ -328,13 +328,34 @@ func (s *TRPClient) handleChan(src net.Conn) {
 		s.handleUdp(src)
 	}
 	//connect to target if conn type is tcp or udp
-	if targetConn, err := net.DialTimeout(lk.ConnType, lk.Host, lk.Option.Timeout); err != nil {
+	if targetConn, err := dialTargetWithRetry(lk.ConnType, lk.Host, lk.Option.Timeout, lk.Option.RetryCount); err != nil {
 		logs.Warn("connect to %s error %s", lk.Host, err.Error())
 		src.Close()
 	} else {
 		logs.Trace("new %s connection with the goal of %s, remote address:%s", lk.ConnType, lk.Host, lk.RemoteAddr)
 		conn.CopyWaitGroup(src, targetConn, lk.Crypt, lk.Compress, nil, nil, false, nil, nil)
 	}
+}
+
+func dialTargetWithRetry(connType string, targetHost string, timeout time.Duration, retryCount int) (targetConn net.Conn, err error) {
+	attempts := retryCount + 1
+	if attempts < 1 {
+		attempts = 1
+	}
+	for attempt := 1; attempt <= attempts; attempt++ {
+		targetConn, err = net.DialTimeout(connType, targetHost, timeout)
+		if err == nil {
+			if attempt > 1 {
+				logs.Info("target connect retry success, conn type %s, target %s, attempt %d/%d", connType, targetHost, attempt, attempts)
+			}
+			return targetConn, nil
+		}
+		if attempt == attempts {
+			return nil, err
+		}
+		logs.Warn("target connect failed, conn type %s, target %s, attempt %d/%d, timeout %s, retry next, error %s", connType, targetHost, attempt, attempts, timeout, err.Error())
+	}
+	return nil, err
 }
 
 func (s *TRPClient) handleUdp(serverConn net.Conn) {
