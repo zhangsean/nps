@@ -242,5 +242,6 @@ func run() {
 		timeout = 60
 	}
 	proxyConnectTimeoutSeconds := beego.AppConfig.DefaultInt("proxy_connect_timeout_seconds", 5)
-	go server.StartNewServer(bridgePort, task, beego.AppConfig.String("bridge_type"), timeout, proxyConnectTimeoutSeconds)
+	proxyConnectRetryCount := beego.AppConfig.DefaultInt("proxy_connect_retry_count", 1)
+	go server.StartNewServer(bridgePort, task, beego.AppConfig.String("bridge_type"), timeout, proxyConnectTimeoutSeconds, proxyConnectRetryCount)
 }

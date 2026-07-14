@@ -38,7 +38,7 @@ func run() {
 	}
 	bridgePort, err := beego.AppConfig.Int("bridge_port")
   // 开启一个web服务器，作为前端，并允许添加新的服务 
-	go server.StartNewServer(bridgePort, task, beego.AppConfig.String("bridge_type"), timeout)
+	go server.StartNewServer(bridgePort, task, beego.AppConfig.String("bridge_type"), timeout, proxyConnectTimeout, proxyConnectRetryCount)
 }
 ```
 
@@ -72,7 +72,9 @@ func StartNewServer(
     bridgePort int,  // 网桥
     cnf *file.Tunnel,  // 通道
     bridgeType string,  // 网桥类型
-    bridgeDisconnect int // 断开
+    bridgeDisconnect int, // 断开
+    proxyConnectTimeout int, // 代理连接超时秒数
+    proxyConnectRetryCount int // 代理连接超时重试次数
     )
 
 // 网桥创建通道
@@ -81,7 +83,9 @@ Bridge := bridge.NewTunnel(
     bridgeType,
     ip,
     RunList,
-    bridgeDisconnect
+    bridgeDisconnect,
+    proxyConnectTimeout,
+    proxyConnectRetryCount
     )
 
 // 启动通道

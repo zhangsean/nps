@@ -29,6 +29,8 @@ const (
 
 const defaultNewConnTimeout = time.Minute * 2
 
+var ErrNewConnTimeout = errors.New("create connection fail，the server refused the connection")
+
 type Mux struct {
 	latency uint64 // we store latency in bits, but it's float64
 	net.Listener
@@ -113,7 +115,7 @@ func (s *Mux) NewConnWithTimeout(timeout time.Duration) (*conn, error) {
 	}
 	s.connMap.Delete(conn.connId)
 	_ = conn.Close()
-	return nil, errors.New("create connection fail，the server refused the connection")
+	return nil, ErrNewConnTimeout
 }
 
 func (s *Mux) Accept() (net.Conn, error) {
