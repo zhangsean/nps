@@ -377,7 +377,7 @@ func (s *Bridge) register(c *conn.Conn) {
 func (s *Bridge) SendLinkInfo(clientId int, link *conn.Link, t *file.Tunnel) (target net.Conn, err error) {
 	//if the proxy type is local
 	if link.LocalProxy {
-		target, err = net.Dial("tcp", link.Host)
+		target, err = s.dialLocalProxyTargetWithRetry(link.ConnType, link.Host)
 		return
 	}
 	if v, ok := s.Client.Load(clientId); ok {
@@ -421,6 +421,35 @@ func (s *Bridge) SendLinkInfo(clientId int, link *conn.Link, t *file.Tunnel) (ta
 		err = errors.New(fmt.Sprintf("the client %d is not connect", clientId))
 	}
 	return
+}
+
+func (s *Bridge) dialLocalProxyTargetWithRetry(connType string, targetHost string) (target net.Conn, err error) {
+	connType = localProxyTargetConnType(connType)
+	attempts := s.targetConnectRetryCount + 1
+	if attempts < 1 {
+		attempts = 1
+	}
+	for attempt := 1; attempt <= attempts; attempt++ {
+		target, err = net.DialTimeout(connType, targetHost, s.targetConnectTimeout)
+		if err == nil {
+			if attempt > 1 {
+				logs.Info("local proxy target connect retry success, conn type %s, target %s, attempt %d/%d", connType, targetHost, attempt, attempts)
+			}
+			return target, nil
+		}
+		if attempt == attempts {
+			return nil, err
+		}
+		logs.Warn("local proxy target connect failed, conn type %s, target %s, attempt %d/%d, timeout %s, retry next, error %s", connType, targetHost, attempt, attempts, s.targetConnectTimeout, err.Error())
+	}
+	return nil, err
+}
+
+func localProxyTargetConnType(connType string) string {
+	if connType == "http" {
+		return common.CONN_TCP
+	}
+	return connType
 }
 
 func (s *Bridge) ping() {

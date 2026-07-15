@@ -33,5 +33,5 @@ pprof_ip|debug pprof 服务端ip
 pprof_port|debug pprof 端口
 disconnect_timeout|客户端连接超时，单位 5s，默认值 60，即 300s = 5mins
 client_connect_timeout_seconds|nps 等待 npc 接受新转发连接的超时时间，直接配置秒数，默认 5
-target_connect_timeout_seconds|npc 连接目标服务器的超时时间，直接配置秒数，默认 5
-target_connect_retry_count|npc 连接目标服务器失败或超时时的重试次数，默认 1；配置 0 表示不重试
+target_connect_timeout_seconds|npc 或 nps LocalProxy 连接目标服务器的超时时间，直接配置秒数，默认 5
+target_connect_retry_count|npc 或 nps LocalProxy 连接目标服务器失败或超时时的重试次数，默认 1；配置 0 表示不重试
