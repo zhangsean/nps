@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"ehang.io/nps/lib/common"
+	npsconn "ehang.io/nps/lib/conn"
 	"ehang.io/nps/lib/file"
 	"github.com/astaxie/beego"
 	"github.com/astaxie/beego/logs"
@@ -24,6 +25,7 @@ import (
 
 type httpAccessLogEntry struct {
 	Timestamp      string `json:"timestamp"`
+	Event          string `json:"event,omitempty"`
 	Method         string `json:"method"`
 	Scheme         string `json:"scheme,omitempty"`
 	Host           string `json:"host,omitempty"`
@@ -39,6 +41,10 @@ type httpAccessLogEntry struct {
 	TLSPassthrough bool   `json:"tls_passthrough,omitempty"`
 	Error          string `json:"error,omitempty"`
 	ErrorType      string `json:"error_type,omitempty"`
+	RetrySource    string `json:"retry_source,omitempty"`
+	RetryAttempt   int    `json:"retry_attempt,omitempty"`
+	RetryAttempts  int    `json:"retry_attempts,omitempty"`
+	RetryDelayMS   int64  `json:"retry_delay_ms,omitempty"`
 }
 
 type httpAccessLogRecord struct {
@@ -148,6 +154,43 @@ func (record *httpAccessLogRecord) SetResponseBytes(responseBytes int64) {
 	}
 }
 
+func (record *httpAccessLogRecord) TargetConnectRetryHook(source string) npsconn.TargetConnectRetryHook {
+	return func(info npsconn.RetryInfo) {
+		if info.Source == "" {
+			info.Source = source
+		}
+		record.WriteTargetConnectRetry(info)
+	}
+}
+
+func (record *httpAccessLogRecord) WriteTargetConnectRetry(info npsconn.RetryInfo) {
+	if record == nil {
+		return
+	}
+	entry := record.entry
+	entry.Event = "target_connect_retry"
+	entry.DurationMS = time.Since(record.start).Milliseconds()
+	if info.Target != "" {
+		entry.Target = info.Target
+	}
+	entry.Error = info.Error
+	entry.ErrorType = classifyHTTPAccessLogError(info.Error)
+	entry.RetrySource = info.Source
+	entry.RetryAttempt = info.Attempt
+	entry.RetryAttempts = info.Attempts
+	entry.RetryDelayMS = info.Delay.Milliseconds()
+	retryRecord := &httpAccessLogRecord{entry: entry, start: record.start, path: record.path}
+	if shouldSkipHTTPAccessLog(retryRecord) {
+		return
+	}
+	line, err := buildHTTPAccessLogLine(entry)
+	if err != nil {
+		logs.Warn("build http access retry log error: %s", err.Error())
+		return
+	}
+	writeHTTPAccessLog(line)
+}
+
 func (record *httpAccessLogRecord) Finish(errText string) {
 	if record == nil {
 		return
@@ -210,6 +253,7 @@ func buildHTTPAccessLogLine(entry httpAccessLogEntry) ([]byte, error) {
 		}
 	}
 	add("timestamp", entry.Timestamp, true)
+	add("event", entry.Event, false)
 	add("method", entry.Method, true)
 	add("scheme", entry.Scheme, false)
 	add("host", entry.Host, false)
@@ -225,6 +269,10 @@ func buildHTTPAccessLogLine(entry httpAccessLogEntry) ([]byte, error) {
 	add("tls_passthrough", entry.TLSPassthrough, false)
 	add("error", entry.Error, false)
 	add("error_type", entry.ErrorType, false)
+	add("retry_source", entry.RetrySource, false)
+	add("retry_attempt", entry.RetryAttempt, false)
+	add("retry_attempts", entry.RetryAttempts, false)
+	add("retry_delay_ms", entry.RetryDelayMS, false)
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }

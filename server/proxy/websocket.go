@@ -66,6 +66,7 @@ func (rp *HttpReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request)
 	req = req.WithContext(context.WithValue(req.Context(), "host", host))
 	req = req.WithContext(context.WithValue(req.Context(), "target", targetAddr))
 	req = req.WithContext(context.WithValue(req.Context(), "req", req))
+	req = req.WithContext(context.WithValue(req.Context(), "accessLog", accessLog))
 
 	rp.proxy.ServeHTTP(rw, req, host)
 
@@ -123,8 +124,10 @@ func WebSocketHttpReverseProxy(s *httpServer) *HttpReverseProxy {
 				r := ctx.Value("req").(*http.Request)
 				host = ctx.Value("host").(*file.Host)
 				targetAddr = ctx.Value("target").(string)
+				accessLog := ctx.Value("accessLog").(*httpAccessLogRecord)
 
 				lk = conn.NewLink("http", targetAddr, host.Client.Cnf.Crypt, host.Client.Cnf.Compress, r.RemoteAddr, host.Target.LocalProxy)
+				lk.SetTargetConnectRetryHook(accessLog.TargetConnectRetryHook("local_proxy"))
 				if target, err = s.bridge.SendLinkInfo(host.Client.Id, lk, nil); err != nil {
 					logs.Notice("connect to target %s error %s", lk.Host, err)
 					return nil, NewHTTPError(http.StatusBadGateway, "Cannot connect to the server")
@@ -139,7 +142,12 @@ func WebSocketHttpReverseProxy(s *httpServer) *HttpReverseProxy {
 		},
 		ErrorHandler: func(rw http.ResponseWriter, req *http.Request, err error) {
 			logs.Warn("do http proxy request error: %v", err)
-			rw.WriteHeader(http.StatusNotFound)
+			statusCode := upstreamHTTPErrorStatusCode(err)
+			var httpErr *HTTPError
+			if errors.As(err, &httpErr) {
+				statusCode = httpErr.HTTPCode
+			}
+			rw.WriteHeader(statusCode)
 		},
 	})
 	proxy.WebSocketDialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -154,8 +162,10 @@ func WebSocketHttpReverseProxy(s *httpServer) *HttpReverseProxy {
 		r := ctx.Value("req").(*http.Request)
 		host = ctx.Value("host").(*file.Host)
 		targetAddr = ctx.Value("target").(string)
+		accessLog := ctx.Value("accessLog").(*httpAccessLogRecord)
 
 		lk = conn.NewLink("tcp", targetAddr, host.Client.Cnf.Crypt, host.Client.Cnf.Compress, r.RemoteAddr, host.Target.LocalProxy)
+		lk.SetTargetConnectRetryHook(accessLog.TargetConnectRetryHook("local_proxy"))
 		if target, err = s.bridge.SendLinkInfo(host.Client.Id, lk, nil); err != nil {
 			logs.Notice("connect to target %s error %s", lk.Host, err)
 			return nil, NewHTTPError(http.StatusBadGateway, "Cannot connect to the target")

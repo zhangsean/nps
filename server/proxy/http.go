@@ -165,12 +165,13 @@ func (s *httpServer) handleHttp(c *conn.Conn, r *http.Request) {
 		remoteAddr string
 		accessLogs []*httpAccessLogRecord
 		accessLog  *httpAccessLogRecord
+		failStatus = http.StatusNotFound
 	)
 	defer func() {
 		if connClient != nil {
 			connClient.Close()
 		} else {
-			s.writeConnFail(c.Conn)
+			s.writeHTTPError(c.Conn, failStatus)
 		}
 		c.Close()
 	}()
@@ -231,8 +232,9 @@ reset:
 		return
 	}
 	if targetAddr, err = host.Target.GetRandomTarget(); err != nil {
-		accessLog.SetStatusCode(http.StatusNotFound)
-		accessLog.SetResponseBytes(s.connectionFailResponseBytes())
+		failStatus = http.StatusBadGateway
+		accessLog.SetStatusCode(failStatus)
+		accessLog.SetResponseBytes(s.httpErrorResponseBytes(failStatus))
 		accessLog.Finish(err.Error())
 		logs.Warn(err.Error())
 		return
@@ -249,9 +251,11 @@ reset:
 	}
 
 	lk = conn.NewLink("http", targetAddr, host.Client.Cnf.Crypt, host.Client.Cnf.Compress, r.RemoteAddr, host.Target.LocalProxy)
+	lk.SetTargetConnectRetryHook(accessLog.TargetConnectRetryHook("local_proxy"))
 	if target, err = s.bridge.SendLinkInfo(host.Client.Id, lk, nil); err != nil {
-		accessLog.SetStatusCode(http.StatusNotFound)
-		accessLog.SetResponseBytes(s.connectionFailResponseBytes())
+		failStatus = http.StatusBadGateway
+		accessLog.SetStatusCode(failStatus)
+		accessLog.SetResponseBytes(s.httpErrorResponseBytes(failStatus))
 		accessLog.Finish(err.Error())
 		logs.Notice("connect to target %s error %s", lk.Host, err)
 		return
@@ -276,7 +280,11 @@ reset:
 			resp, err := http.ReadResponse(responseReader, pendingResponse.request)
 			if err != nil || resp == nil {
 				if pendingResponse.accessLog != nil && err != nil {
+					statusCode := upstreamHTTPErrorStatusCode(err)
+					pendingResponse.accessLog.SetStatusCode(statusCode)
+					pendingResponse.accessLog.SetResponseBytes(s.httpErrorResponseBytes(statusCode))
 					pendingResponse.accessLog.Finish(err.Error())
+					s.writeHTTPError(c.Conn, statusCode)
 				}
 				return
 			}
@@ -334,8 +342,12 @@ reset:
 		lenConn = conn.NewLenConn(connClient)
 		//lenConn = conn.LenConn
 		if err := r.Write(lenConn); err != nil {
+			statusCode := http.StatusBadGateway
+			currentAccessLog.SetStatusCode(statusCode)
 			currentAccessLog.SetRequestBytes(int64(lenConn.Len))
+			currentAccessLog.SetResponseBytes(s.httpErrorResponseBytes(statusCode))
 			currentAccessLog.Finish(err.Error())
+			s.writeHTTPError(c.Conn, statusCode)
 			logs.Error("Request write error:", err)
 			break
 		}
@@ -445,7 +457,17 @@ func (s *httpServer) finishHTTPNotFoundAccessLogWithBytes(r *http.Request, remot
 }
 
 func (s *httpServer) connectionFailResponseBytes() int64 {
-	return int64(len(common.ConnectionFailBytes) + len(s.errorContent))
+	return s.httpErrorResponseBytes(http.StatusNotFound)
+}
+
+func upstreamHTTPErrorStatusCode(err error) int {
+	if err == nil {
+		return http.StatusBadGateway
+	}
+	if strings.Contains(strings.ToLower(err.Error()), "timeout") {
+		return http.StatusGatewayTimeout
+	}
+	return http.StatusBadGateway
 }
 
 func (s *httpServer) NewServer(port int, scheme string) *http.Server {

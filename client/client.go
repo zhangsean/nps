@@ -6,6 +6,7 @@ import (
 	"ehang.io/nps/lib/nps_mux"
 	"errors"
 	"io"
+	"math/rand"
 	"net"
 	"net/http"
 	"regexp"
@@ -22,6 +23,8 @@ import (
 	"ehang.io/nps/lib/conn"
 	"ehang.io/nps/lib/crypt"
 )
+
+var targetConnectRetrySleep = time.Sleep
 
 type TRPClient struct {
 	svrAddr        string
@@ -295,7 +298,7 @@ func (s *TRPClient) handleChan(src net.Conn) {
 	lk.Host = common.FormatAddress(lk.Host)
 	//if Conn type is http, read the request and log
 	if lk.ConnType == "http" {
-		if targetConn, err := dialTargetWithRetry(common.CONN_TCP, lk.Host, lk.Option.Timeout, lk.Option.RetryCount); err != nil {
+		if targetConn, err := dialTargetWithRetry(common.CONN_TCP, lk.Host, lk.Option.Timeout, lk.Option.RetryCount, lk.Option.RetryInterval); err != nil {
 			logs.Warn("connect to %s error %s", lk.Host, err.Error())
 			src.Close()
 		} else {
@@ -328,7 +331,7 @@ func (s *TRPClient) handleChan(src net.Conn) {
 		s.handleUdp(src)
 	}
 	//connect to target if conn type is tcp or udp
-	if targetConn, err := dialTargetWithRetry(lk.ConnType, lk.Host, lk.Option.Timeout, lk.Option.RetryCount); err != nil {
+	if targetConn, err := dialTargetWithRetry(lk.ConnType, lk.Host, lk.Option.Timeout, lk.Option.RetryCount, lk.Option.RetryInterval); err != nil {
 		logs.Warn("connect to %s error %s", lk.Host, err.Error())
 		src.Close()
 	} else {
@@ -337,7 +340,7 @@ func (s *TRPClient) handleChan(src net.Conn) {
 	}
 }
 
-func dialTargetWithRetry(connType string, targetHost string, timeout time.Duration, retryCount int) (targetConn net.Conn, err error) {
+func dialTargetWithRetry(connType string, targetHost string, timeout time.Duration, retryCount int, retryInterval time.Duration) (targetConn net.Conn, err error) {
 	attempts := retryCount + 1
 	if attempts < 1 {
 		attempts = 1
@@ -353,9 +356,23 @@ func dialTargetWithRetry(connType string, targetHost string, timeout time.Durati
 		if attempt == attempts {
 			return nil, err
 		}
-		logs.Warn("target connect failed, conn type %s, target %s, attempt %d/%d, timeout %s, retry next, error %s", connType, targetHost, attempt, attempts, timeout, err.Error())
+		delay := randomTargetConnectRetryDelay(retryInterval)
+		if delay > 0 {
+			logs.Warn("target connect failed, conn type %s, target %s, attempt %d/%d, timeout %s, retry after %s, error %s", connType, targetHost, attempt, attempts, timeout, delay, err.Error())
+			targetConnectRetrySleep(delay)
+		} else {
+			logs.Warn("target connect failed, conn type %s, target %s, attempt %d/%d, timeout %s, retry next, error %s", connType, targetHost, attempt, attempts, timeout, err.Error())
+		}
 	}
 	return nil, err
+}
+
+func randomTargetConnectRetryDelay(maxInterval time.Duration) time.Duration {
+	maxMs := maxInterval.Milliseconds()
+	if maxMs <= 0 {
+		return 0
+	}
+	return time.Duration(rand.Int63n(maxMs)+1) * time.Millisecond
 }
 
 func (s *TRPClient) handleUdp(serverConn net.Conn) {

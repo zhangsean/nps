@@ -3,6 +3,7 @@ package proxy
 import (
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -52,7 +53,7 @@ func TestConnectionFailResponseBytes(t *testing.T) {
 	server := &httpServer{
 		BaseServer: BaseServer{errorContent: []byte("nps 404")},
 	}
-	want := int64(len(common.ConnectionFailBytes) + len("nps 404"))
+	want := int64(len("HTTP/1.1 404 Not Found\r\n\r\nnps 404"))
 	if got := server.connectionFailResponseBytes(); got != want {
 		t.Fatalf("unexpected connection fail response bytes %d, want %d", got, want)
 	}
@@ -239,6 +240,58 @@ func TestBuildHTTPAccessLogLineWithStatusCode(t *testing.T) {
 	}
 	if got.ResponseBytes != 128 {
 		t.Fatalf("unexpected response bytes %d", got.ResponseBytes)
+	}
+}
+
+func TestBuildHTTPAccessLogLineWithRetryEvent(t *testing.T) {
+	entry := httpAccessLogEntry{
+		Timestamp:     "2026-07-15 10:00:00.000",
+		Event:         "target_connect_retry",
+		Method:        http.MethodGet,
+		URL:           "/api",
+		Target:        "127.0.0.1:8080",
+		DurationMS:    12,
+		Error:         "dial tcp 127.0.0.1:8080: connect: connection refused",
+		ErrorType:     "upstream_error",
+		RetrySource:   "local_proxy",
+		RetryAttempt:  1,
+		RetryAttempts: 2,
+		RetryDelayMS:  237,
+	}
+
+	line, err := buildHTTPAccessLogLine(entry)
+	if err != nil {
+		t.Fatalf("build log line error: %v", err)
+	}
+
+	var got httpAccessLogEntry
+	if err := json.Unmarshal(line, &got); err != nil {
+		t.Fatalf("log line is not json: %v", err)
+	}
+	if got.Event != "target_connect_retry" || got.RetrySource != "local_proxy" || got.RetryAttempt != 1 || got.RetryAttempts != 2 || got.RetryDelayMS != 237 {
+		t.Fatalf("unexpected retry fields: %+v", got)
+	}
+}
+
+func TestUpstreamHTTPErrorStatusCode(t *testing.T) {
+	if got := upstreamHTTPErrorStatusCode(errors.New("read response: i/o timeout")); got != http.StatusGatewayTimeout {
+		t.Fatalf("expected 504 for timeout, got %d", got)
+	}
+	if got := upstreamHTTPErrorStatusCode(errors.New("read response: EOF")); got != http.StatusBadGateway {
+		t.Fatalf("expected 502 for upstream error, got %d", got)
+	}
+	if got := upstreamHTTPErrorStatusCode(nil); got != http.StatusBadGateway {
+		t.Fatalf("expected 502 for nil error, got %d", got)
+	}
+}
+
+func TestHTTPErrorResponseBytes(t *testing.T) {
+	server := &httpServer{BaseServer: BaseServer{errorContent: []byte("body")}}
+	if got, want := server.httpErrorResponseBytes(http.StatusBadGateway), int64(len("HTTP/1.1 502 Bad Gateway\r\n\r\nbody")); got != want {
+		t.Fatalf("unexpected 502 response bytes %d, want %d", got, want)
+	}
+	if got, want := server.httpErrorResponseBytes(http.StatusGatewayTimeout), int64(len("HTTP/1.1 504 Gateway Timeout\r\n\r\nbody")); got != want {
+		t.Fatalf("unexpected 504 response bytes %d, want %d", got, want)
 	}
 }
 

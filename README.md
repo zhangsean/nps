@@ -28,6 +28,10 @@ https://natnps.com/
 ## 更新日志
 - 未发布
 
+- 2026-07-15  v0.27.18
+  - **新增**：`nps.conf` 增加 `target_connect_retry_interval_ms`，支持目标连接失败后、下一次重试前随机等待，默认 0 不等待；nps LocalProxy 触发目标连接重试时会写入 `event=target_connect_retry` 的 access.log 事件。
+  - **修复**：HTTP 代理连接目标后端失败时返回 502，等待后端响应超时时返回 504，避免将上游错误误报为 404。
+
 - 2026-07-14  v0.27.17
   - **修复**：nps LocalProxy 本地代理连接目标服务器时复用 `target_connect_timeout_seconds` 和 `target_connect_retry_count`，避免本地直连目标不可达时被系统 TCP connect 默认超时拖到百秒级。
   - **新增**：HTTP/HTTPS 访问日志增加 `http_access_log_exclude_errors` 和 `http_access_log_exclude_error_types`，支持按错误文本或错误类型过滤无效 CONNECT 扫描等噪声日志。

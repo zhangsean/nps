@@ -38,7 +38,7 @@ func run() {
 	}
 	bridgePort, err := beego.AppConfig.Int("bridge_port")
   // 开启一个web服务器，作为前端，并允许添加新的服务 
-	go server.StartNewServer(bridgePort, task, beego.AppConfig.String("bridge_type"), timeout, clientConnectTimeout, targetConnectTimeout, targetConnectRetryCount)
+	go server.StartNewServer(bridgePort, task, beego.AppConfig.String("bridge_type"), timeout, clientConnectTimeout, targetConnectTimeout, targetConnectRetryCount, targetConnectRetryInterval)
 }
 ```
 
@@ -75,7 +75,8 @@ func StartNewServer(
     bridgeDisconnect int, // 断开
     clientConnectTimeout int, // 客户端接受转发连接超时秒数
     targetConnectTimeout int, // 目标连接超时秒数
-    targetConnectRetryCount int // 目标连接失败或超时重试次数
+    targetConnectRetryCount int, // 目标连接失败或超时重试次数
+    targetConnectRetryInterval int // 目标连接重试前最大随机等待毫秒数
     )
 
 // 网桥创建通道
@@ -87,7 +88,8 @@ Bridge := bridge.NewTunnel(
     bridgeDisconnect,
     clientConnectTimeout,
     targetConnectTimeout,
-    targetConnectRetryCount
+    targetConnectRetryCount,
+    targetConnectRetryInterval
     )
 
 // 启动通道

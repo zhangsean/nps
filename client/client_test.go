@@ -59,12 +59,53 @@ func TestDialTargetWithRetrySuccess(t *testing.T) {
 		}
 	}()
 
-	conn, err := dialTargetWithRetry("tcp", listener.Addr().String(), time.Second, 1)
+	conn, err := dialTargetWithRetry("tcp", listener.Addr().String(), time.Second, 1, 0)
 	if err != nil {
 		t.Fatalf("dialTargetWithRetry returned error: %v", err)
 	}
 	_ = conn.Close()
 	<-done
+}
+
+func TestDialTargetWithRetrySleepsBeforeRetry(t *testing.T) {
+	oldSleep := targetConnectRetrySleep
+	var delays []time.Duration
+	targetConnectRetrySleep = func(delay time.Duration) {
+		delays = append(delays, delay)
+	}
+	t.Cleanup(func() {
+		targetConnectRetrySleep = oldSleep
+	})
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen error: %v", err)
+	}
+	target := listener.Addr().String()
+	_ = listener.Close()
+
+	if conn, err := dialTargetWithRetry("tcp", target, 10*time.Millisecond, 1, 500*time.Millisecond); err == nil {
+		_ = conn.Close()
+		t.Fatalf("expected dial error")
+	}
+	if len(delays) != 1 {
+		t.Fatalf("expected one retry sleep, got %d", len(delays))
+	}
+	if delays[0] < time.Millisecond || delays[0] > 500*time.Millisecond {
+		t.Fatalf("retry delay %s out of range", delays[0])
+	}
+}
+
+func TestRandomTargetConnectRetryDelayRange(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		delay := randomTargetConnectRetryDelay(500 * time.Millisecond)
+		if delay < time.Millisecond || delay > 500*time.Millisecond {
+			t.Fatalf("retry delay %s out of range", delay)
+		}
+	}
+	if delay := randomTargetConnectRetryDelay(0); delay != 0 {
+		t.Fatalf("expected zero retry delay when interval disabled, got %s", delay)
+	}
 }
 
 func TestExtractPublicCipResponseSkipsInvalidCandidates(t *testing.T) {

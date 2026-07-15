@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"sort"
@@ -23,7 +24,7 @@ type NetBridge interface {
 	SendLinkInfo(clientId int, link *conn.Link, t *file.Tunnel) (target net.Conn, err error)
 }
 
-//BaseServer struct
+// BaseServer struct
 type BaseServer struct {
 	id           int
 	bridge       NetBridge
@@ -41,7 +42,7 @@ func NewBaseServer(bridge *bridge.Bridge, task *file.Tunnel) *BaseServer {
 	}
 }
 
-//add the flow
+// add the flow
 func (s *BaseServer) FlowAdd(in, out int64) {
 	s.Lock()
 	defer s.Unlock()
@@ -49,7 +50,7 @@ func (s *BaseServer) FlowAdd(in, out int64) {
 	s.task.Flow.InletFlow += in
 }
 
-//change the flow
+// change the flow
 func (s *BaseServer) FlowAddHost(host *file.Host, in, out int64) {
 	s.Lock()
 	defer s.Unlock()
@@ -57,13 +58,36 @@ func (s *BaseServer) FlowAddHost(host *file.Host, in, out int64) {
 	host.Flow.InletFlow += in
 }
 
-//write fail bytes to the connection
+// write fail bytes to the connection
 func (s *BaseServer) writeConnFail(c net.Conn) {
-	c.Write([]byte(common.ConnectionFailBytes))
-	c.Write(s.errorContent)
+	s.writeHTTPError(c, http.StatusNotFound)
 }
 
-//auth check
+func (s *BaseServer) writeHTTPError(c net.Conn, statusCode int) {
+	if c == nil {
+		return
+	}
+	statusText := http.StatusText(statusCode)
+	if statusText == "" {
+		statusText = http.StatusText(http.StatusInternalServerError)
+		statusCode = http.StatusInternalServerError
+	}
+	_, _ = c.Write([]byte(fmt.Sprintf("HTTP/1.1 %d %s\r\n\r\n", statusCode, statusText)))
+	if len(s.errorContent) > 0 {
+		_, _ = c.Write(s.errorContent)
+	}
+}
+
+func (s *BaseServer) httpErrorResponseBytes(statusCode int) int64 {
+	statusText := http.StatusText(statusCode)
+	if statusText == "" {
+		statusText = http.StatusText(http.StatusInternalServerError)
+		statusCode = http.StatusInternalServerError
+	}
+	return int64(len(fmt.Sprintf("HTTP/1.1 %d %s\r\n\r\n", statusCode, statusText)) + len(s.errorContent))
+}
+
+// auth check
 func (s *BaseServer) auth(r *http.Request, c *conn.Conn, u, p string) error {
 	if u != "" && p != "" && !common.CheckAuth(r, u, p) {
 		c.Write([]byte(common.UnauthorizedBytes))
@@ -73,7 +97,7 @@ func (s *BaseServer) auth(r *http.Request, c *conn.Conn, u, p string) error {
 	return nil
 }
 
-//check flow limit of the client ,and decrease the allow num of client
+// check flow limit of the client ,and decrease the allow num of client
 func (s *BaseServer) CheckFlowAndConnNum(client *file.Client) error {
 	if client.Flow.FlowLimit > 0 && (client.Flow.FlowLimit<<20) < (client.Flow.ExportFlow+client.Flow.InletFlow) {
 		return errors.New("Traffic exceeded")
@@ -93,9 +117,9 @@ func in(target string, str_array []string) bool {
 	return false
 }
 
-//create a new connection and start bytes copying
+// create a new connection and start bytes copying
 func (s *BaseServer) DealClient(c *conn.Conn, client *file.Client, addr string,
-	rb []byte, tp string, f func(), flow *file.Flow, localProxy bool, task *file.Tunnel) error {
+	rb []byte, tp string, f func(), flow *file.Flow, localProxy bool, task *file.Tunnel, retryHooks ...conn.TargetConnectRetryHook) error {
 
 	// 判断访问地址是否在全局黑名单内
 	if IsGlobalBlackIp(c.RemoteAddr().String()) {
@@ -110,6 +134,9 @@ func (s *BaseServer) DealClient(c *conn.Conn, client *file.Client, addr string,
 	}
 
 	link := conn.NewLink(tp, addr, client.Cnf.Crypt, client.Cnf.Compress, c.Conn.RemoteAddr().String(), localProxy)
+	if len(retryHooks) > 0 {
+		link.SetTargetConnectRetryHook(retryHooks[0])
+	}
 	if target, err := s.bridge.SendLinkInfo(client.Id, link, s.task); err != nil {
 		logs.Warn("get connection from client id %d  error %s", client.Id, err.Error())
 		c.Close()
