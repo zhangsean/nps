@@ -17,8 +17,7 @@ https://natnps.com/
 公益NPS内网穿透服务，长期免费，6M带宽，3条隧道，不限流量，欢迎来嫖，自行注册账号。
 
 # 特价云服务器
-国内BGP，游戏开服，2核 2G 15M上行 25元/月，[专属连接，首月5折](https://www.rainyun.com/MjY0MzY1_)
-
+国内BGP，游戏开服，虚拟主机 8元/月起、云服务器 15元/月起，游戏云 25元/月起，[专属连接，首月5折](https://www.rainyun.com/MTE4MTAxNA==_)
 
 # 捐赠
 ![image](image/tip_wx.png)
