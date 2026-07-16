@@ -140,6 +140,10 @@
 		<zh-CN>新增</zh-CN>
 		<en-US>Add</en-US>
 	</lang>
+	<lang id="word-allowupload">
+		<zh-CN>允许上传</zh-CN>
+		<en-US>Allow upload</en-US>
+	</lang>
 	<lang id="word-cancel">
 		<zh-CN>取消</zh-CN>
 		<en-US>Cancel</en-US>
@@ -537,6 +541,10 @@
 	<lang id="word-trafficstatistics">
 		<zh-CN>流量统计</zh-CN>
 		<en-US>Traffic statistics</en-US>
+	</lang>
+	<lang id="word-uploadpassword">
+		<zh-CN>上传密码</zh-CN>
+		<en-US>Upload password</en-US>
 	</lang>
 	<lang id="word-true">
 		<zh-CN>是</zh-CN>

@@ -32,6 +32,13 @@ func getTunnelClientId(t *file.Tunnel, requestedClientId int) int {
 	return requestedClientId
 }
 
+func validateTunnelUpload(t *file.Tunnel) string {
+	if t.Mode == "file" && t.AllowUpload && strings.TrimSpace(t.UploadPass) == "" {
+		return "upload password cannot be empty"
+	}
+	return ""
+}
+
 func (s *IndexController) Index() {
 	s.Data["web_base_url"] = beego.AppConfig.String("web_base_url")
 	s.Data["data"] = server.GetDashboardData()
@@ -146,15 +153,20 @@ func (s *IndexController) Add() {
 			Mode:     s.getEscapeString("type"),
 			Target: &file.Target{TargetStr: strings.ReplaceAll(s.getEscapeString("target"), "\r\n", "\n"),
 				LocalProxy: s.GetBoolNoErr("local_proxy")},
-			Id:        int(file.GetDb().JsonDb.GetTaskId()),
-			Status:    true,
-			Remark:    s.getEscapeString("remark"),
-			Password:  s.getEscapeString("password"),
-			LocalPath: s.getEscapeString("local_path"),
-			StripPre:  s.getEscapeString("strip_pre"),
-			Flow:      &file.Flow{},
+			Id:          int(file.GetDb().JsonDb.GetTaskId()),
+			Status:      true,
+			Remark:      s.getEscapeString("remark"),
+			Password:    s.getEscapeString("password"),
+			LocalPath:   s.getEscapeString("local_path"),
+			StripPre:    s.getEscapeString("strip_pre"),
+			AllowUpload: s.GetBoolNoErr("allow_upload"),
+			UploadPass:  s.getEscapeString("upload_password"),
+			Flow:        &file.Flow{},
 		}
 		normalizeTunnelFormDefaults(t)
+		if msg := validateTunnelUpload(t); msg != "" {
+			s.AjaxErr(msg)
+		}
 
 		if t.Port <= 0 {
 			t.Port = tool.GenerateServerPort(t.Mode)
@@ -235,9 +247,15 @@ func (s *IndexController) Edit() {
 			t.Id = id
 			t.LocalPath = s.getEscapeString("local_path")
 			t.StripPre = s.getEscapeString("strip_pre")
+			t.AllowUpload = s.GetBoolNoErr("allow_upload")
+			t.UploadPass = s.getEscapeString("upload_password")
 			t.Remark = s.getEscapeString("remark")
 			t.Target.LocalProxy = s.GetBoolNoErr("local_proxy")
 			normalizeTunnelFormDefaults(t)
+			if msg := validateTunnelUpload(t); msg != "" {
+				s.AjaxErr(msg)
+				return
+			}
 			if client, err := file.GetDb().GetClient(getTunnelClientId(t, t.Client.Id)); err != nil {
 				s.AjaxErr("modified error,the client is not exist")
 				return

@@ -232,7 +232,7 @@ func dealTunnel(s string) *file.Tunnel {
 	t := &file.Tunnel{}
 	t.Target = new(file.Target)
 	for _, v := range splitStr(s) {
-		item := strings.Split(v, "=")
+		item := strings.SplitN(v, "=", 2)
 		if len(item) == 0 {
 			continue
 		} else if len(item) == 1 {
@@ -257,6 +257,10 @@ func dealTunnel(s string) *file.Tunnel {
 			t.LocalPath = item[1]
 		case "strip_pre":
 			t.StripPre = item[1]
+		case "allow_upload":
+			t.AllowUpload = common.GetBoolByStr(item[1])
+		case "upload_password":
+			t.UploadPass = item[1]
 		case "multi_account":
 			t.MultiAccount = &file.MultiAccount{}
 			if common.FileExists(item[1]) {

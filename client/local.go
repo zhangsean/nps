@@ -75,7 +75,10 @@ func startLocalFileServer(config *config.CommonConfig, t *file.Tunnel, vkey stri
 		return
 	}
 	srv := &http.Server{
-		Handler: fileserver.NewBrowser(t.LocalPath, t.StripPre),
+		Handler: fileserver.NewBrowserWithOptions(t.LocalPath, t.StripPre, fileserver.BrowserOptions{
+			AllowUpload:    t.AllowUpload,
+			UploadPassword: t.UploadPass,
+		}),
 	}
 	logs.Info("start local file system, local path %s, strip prefix %s ,remote port %s ", t.LocalPath, t.StripPre, t.Ports)
 	fileServer = append(fileServer, srv)

@@ -146,6 +146,8 @@ type Tunnel struct {
 	IsHttp       bool
 	LocalPath    string
 	StripPre     string
+	AllowUpload  bool
+	UploadPass   string
 	Target       *Target
 	MultiAccount *MultiAccount
 	Health

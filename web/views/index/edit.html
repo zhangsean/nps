@@ -98,6 +98,23 @@
                         </div>
                     </div>
 
+                    <div class="form-group" id="allow_upload">
+                        <label class="col-sm-2 control-label font-bold" langtag="word-allowupload"></label>
+                        <div class="col-sm-10">
+                            <select class="form-control" name="allow_upload">
+                                <option {{if eq false .t.AllowUpload}}selected{{end}} value="0" langtag="word-no"></option>
+                                <option {{if eq true .t.AllowUpload}}selected{{end}} value="1" langtag="word-yes"></option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="upload_password">
+                        <label class="col-sm-2 control-label font-bold" langtag="word-uploadpassword"></label>
+                        <div class="col-sm-10">
+                            <input value="{{.t.UploadPass}}" class="form-control" type="password" name="upload_password" autocomplete="new-password" placeholder="" langtag="word-uploadpassword">
+                        </div>
+                    </div>
+
                     <div class="form-group" id="password">
                         <label class="col-sm-2 control-label font-bold" langtag="word-identificationkey"></label>
                         <div class="col-sm-10">
@@ -180,14 +197,14 @@
 </div>
 <script>
     var arr = []
-    arr["all"] = ["port", "target", "password", "local_path", "strip_pre", "local_proxy"]
+    arr["all"] = ["port", "target", "password", "local_path", "strip_pre", "allow_upload", "upload_password", "local_proxy"]
     arr["tcp"] = ["client_id", "port", "target", "local_proxy"]
     arr["udp"] = ["client_id", "port", "target", "local_proxy"]
     arr["socks5"] = ["client_id", "port"]
     arr["httpProxy"] = ["client_id", "port"]
     arr["secret"] = ["client_id", "target", "password"]
     arr["p2p"] = ["client_id", "target", "password"]
-    arr["file"] = ["client_id", "port", "local_path", "strip_pre", "local_proxy"]
+    arr["file"] = ["client_id", "port", "local_path", "strip_pre", "allow_upload", "upload_password", "local_proxy"]
 
     function syncLocalProxyClient() {
         var cid = $('#client_id')
@@ -223,6 +240,15 @@
             }
         }
         syncLocalProxyClient()
+        syncUploadPassword()
+    }
+
+    function syncUploadPassword() {
+        if ($("#type").val() == "file" && $('select[name="allow_upload"]').val() == "1") {
+            $("#upload_password").css("display", "block")
+        } else {
+            $("#upload_password").css("display", "none")
+        }
     }
 
     function resetForm() {
@@ -248,6 +274,9 @@
         })
         $("#local_proxy").on("change", function (e) {
             syncLocalProxyClient()
+        })
+        $('select[name="allow_upload"]').on("change", function () {
+            syncUploadPassword()
         })
         initPortSelector({
             taskId: {{.t.Id}},
