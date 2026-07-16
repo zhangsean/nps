@@ -543,8 +543,8 @@
 		<en-US>Traffic statistics</en-US>
 	</lang>
 	<lang id="word-uploadpassword">
-		<zh-CN>上传密码</zh-CN>
-		<en-US>Upload password</en-US>
+		<zh-CN>管理密码</zh-CN>
+		<en-US>Management password</en-US>
 	</lang>
 	<lang id="word-true">
 		<zh-CN>是</zh-CN>
@@ -857,6 +857,18 @@
 		<lang id="theportcannotbeopenedbecauseitmayhasbeenoccupiedorisnolongerallowed">
 			<zh-CN>无法打开端口，因为它可能已被占用或不再被允许。</zh-CN>
 			<en-US>The port cannot be opened because it may has been occupied or is no longer allowed.</en-US>
+		</lang>
+		<lang id="info-login-captcha-wrong">
+			<zh-CN>验证码不正确，请重新输入。</zh-CN>
+			<en-US>The verification code is incorrect. Please try again.</en-US>
+		</lang>
+		<lang id="info-login-password-wrong">
+			<zh-CN>用户名或密码不正确，请确认后再试。</zh-CN>
+			<en-US>The username or password is incorrect. Please check and try again.</en-US>
+		</lang>
+		<lang id="managementpasswordcannotbeempty">
+			<zh-CN>管理密码不能为空</zh-CN>
+			<en-US>Management password cannot be empty</en-US>
 		</lang>
 		<lang id="vkeyduplicatepleasereset">
 			<zh-CN>唯一验证密钥重复，请重新设置</zh-CN>

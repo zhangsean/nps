@@ -34,7 +34,7 @@ func getTunnelClientId(t *file.Tunnel, requestedClientId int) int {
 
 func validateTunnelUpload(t *file.Tunnel) string {
 	if t.Mode == "file" && t.AllowUpload && strings.TrimSpace(t.UploadPass) == "" {
-		return "upload password cannot be empty"
+		return "management password cannot be empty"
 	}
 	return ""
 }

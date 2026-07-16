@@ -59,7 +59,7 @@
 	$.fn.cloudLang = function () {
 		$.ajax({
 			type: 'GET',
-			url: window.nps.web_base_url + '/static/page/languages.xml?v=20240528',
+			url: window.nps.web_base_url + '/static/page/languages.xml?v=20260716',
 			dataType: 'xml',
 			success: function (xml) {
 				languages['content'] = xml2json($(xml).children())['content'];
@@ -126,6 +126,7 @@
 })(jQuery);
 
 $(document).ready(function () {
+	$('[data-current-year]').text(new Date().getFullYear());
 	$('body').cloudLang();
 	$('body').on('click','li[lang]',function(){
 		$('#languagemenu').attr('lang',$(this).attr('lang'));

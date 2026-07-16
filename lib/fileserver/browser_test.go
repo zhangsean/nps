@@ -30,7 +30,7 @@ func TestBrowserListsDirectory(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "Index of /") || !strings.Contains(body, "hello.txt") || !strings.Contains(body, "sub/") {
+	if !strings.Contains(body, "文件浏览") || strings.Contains(body, "<h1>当前路径</h1>") || !strings.Contains(body, "hello.txt") || !strings.Contains(body, "sub/") {
 		t.Fatalf("directory listing missing expected entries: %s", body)
 	}
 }
@@ -65,6 +65,32 @@ func TestBrowserRedirectKeepsStripPrefix(t *testing.T) {
 	}
 }
 
+func TestBrowserRendersClickableBreadcrumbs(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "sub", "nested"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/files/sub/nested/", nil)
+	NewBrowser(root, "/files/").ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<nav class="path" aria-label="当前位置">`,
+		`<a class="crumb root" href="../../">/</a>`,
+		`<a class="crumb" href="../">sub</a>`,
+		`<span class="crumb current">nested</span>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("breadcrumb missing %q in: %s", want, body)
+		}
+	}
+}
+
 func TestNormalizeRootDefault(t *testing.T) {
 	if got := NormalizeRoot(""); got != DefaultRoot {
 		t.Fatalf("NormalizeRoot empty = %q, want %q", got, DefaultRoot)
@@ -94,14 +120,30 @@ func TestUploadManagementFlow(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
-	if !strings.Contains(rec.Body.String(), "Upload password") {
-		t.Fatalf("upload login panel missing: %s", rec.Body.String())
+	body := rec.Body.String()
+	if !strings.Contains(body, "login-trigger") || strings.Contains(body, "<section class=\"panel\">") {
+		t.Fatalf("unauthorized upload UI should only show compact login: %s", body)
 	}
 
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, formRequest("http://example.com/?action=mkdir", url.Values{"name": {"blocked"}}, nil))
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("unauthorized mkdir status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, formRequest("http://example.com/?action=login", url.Values{"password": {"wrong"}}, nil))
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("invalid login status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); !strings.Contains(location, "login_error=1") {
+		t.Fatalf("invalid login location = %q, want login_error=1", location)
+	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://example.com/?login_error=1", nil))
+	if !strings.Contains(rec.Body.String(), "管理密码不正确") || !strings.Contains(rec.Body.String(), "login-menu\" open") {
+		t.Fatalf("login error prompt missing: %s", rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()
@@ -112,12 +154,34 @@ func TestUploadManagementFlow(t *testing.T) {
 	cookie := rec.Result().Cookies()[0]
 
 	rec = httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req.AddCookie(cookie)
+	handler.ServeHTTP(rec, req)
+	body = rec.Body.String()
+	if !strings.Contains(body, "上传维护") || !strings.Contains(body, "data-open-mkdir") || strings.Contains(body, "confirm(") {
+		t.Fatalf("authorized upload panel missing expected controls: %s", body)
+	}
+	if strings.Index(body, `action="?action=upload"`) > strings.Index(body, `data-open-mkdir`) {
+		t.Fatalf("upload action should appear before mkdir button: %s", body)
+	}
+
+	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, formRequest("http://example.com/?action=mkdir", url.Values{"name": {"created"}}, cookie))
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("mkdir status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
+	if location := rec.Header().Get("Location"); !strings.Contains(location, "notice=mkdir") {
+		t.Fatalf("mkdir location = %q, want notice=mkdir", location)
+	}
 	if info, err := os.Stat(filepath.Join(root, "created")); err != nil || !info.IsDir() {
 		t.Fatalf("created directory missing, info=%v err=%v", info, err)
+	}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "http://example.com/?notice=mkdir", nil)
+	req.AddCookie(cookie)
+	handler.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), "文件夹创建成功") {
+		t.Fatalf("mkdir notice missing: %s", rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()
@@ -125,8 +189,18 @@ func TestUploadManagementFlow(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("upload status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
+	if location := rec.Header().Get("Location"); !strings.Contains(location, "notice=upload") {
+		t.Fatalf("upload location = %q, want notice=upload", location)
+	}
 	if content, err := os.ReadFile(filepath.Join(root, "uploaded.txt")); err != nil || string(content) != "hello" {
 		t.Fatalf("uploaded file content = %q err=%v", string(content), err)
+	}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "http://example.com/?notice=upload", nil)
+	req.AddCookie(cookie)
+	handler.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), "文件上传成功") {
+		t.Fatalf("upload notice missing: %s", rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()
@@ -134,8 +208,18 @@ func TestUploadManagementFlow(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("delete status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
+	if location := rec.Header().Get("Location"); !strings.Contains(location, "notice=delete") {
+		t.Fatalf("delete location = %q, want notice=delete", location)
+	}
 	if _, err := os.Stat(filepath.Join(root, "uploaded.txt")); !os.IsNotExist(err) {
 		t.Fatalf("uploaded file still exists, err=%v", err)
+	}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "http://example.com/?notice=delete", nil)
+	req.AddCookie(cookie)
+	handler.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), "已删除所选项目") {
+		t.Fatalf("delete notice missing: %s", rec.Body.String())
 	}
 }
 

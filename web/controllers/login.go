@@ -50,7 +50,7 @@ func (self *LoginController) Verify() {
 	captchaOpen, _ := beego.AppConfig.Bool("open_captcha")
 	if captchaOpen {
 		if !cpt.VerifyReq(self.Ctx.Request) {
-			self.Data["json"] = map[string]interface{}{"status": 0, "msg": "the verification code is wrong, please get it again and try again"}
+			self.Data["json"] = map[string]interface{}{"status": 0, "msg": "info-login-captcha-wrong"}
 			self.ServeJSON()
 			return
 		}
@@ -58,7 +58,7 @@ func (self *LoginController) Verify() {
 	if self.doLogin(username, password, true) {
 		self.Data["json"] = map[string]interface{}{"status": 1, "msg": "login success"}
 	} else {
-		self.Data["json"] = map[string]interface{}{"status": 0, "msg": "username or password incorrect"}
+		self.Data["json"] = map[string]interface{}{"status": 0, "msg": "info-login-password-wrong"}
 	}
 	self.ServeJSON()
 }
