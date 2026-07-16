@@ -172,7 +172,10 @@
                 halign: 'center',
                 visible: isFileTunnelList,//false表示不显示
                 formatter: function (value, row, index) {
-                    return value || '/'
+                    if (!value || value == '/') {
+                        return '/'
+                    }
+                    return '/' + String(value).replace(/^\/+|\/+$/g, '') + '/'
                 }
             },
             {
