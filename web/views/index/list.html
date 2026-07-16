@@ -18,7 +18,7 @@
                 <div class="content">
                     <div class="table-responsive">
                         <div id="toolbar">
-                            <a href="{{.web_base_url}}/index/add?type={{.type}}&client_id={{.client_id}}" class="btn btn-primary dim">
+                            <a href="{{.web_base_url}}/index/add?type={{.type}}&client_id={{.client_id}}" class="btn btn-primary dim list-form-link">
                             <i class="fa fa-fw fa-lg fa-plus"></i> <span langtag="word-add"></span></a>
                         </div>
                         <table id="taskList_table" class="table-striped table-hover" data-mobile-responsive="true"></table>
@@ -39,6 +39,25 @@
     var bridgeType = "{{.bridgeType}}";
     var tunnelType = "{{.type}}";
     var tunnelClientId = "{{.client_id}}";
+    var tunnelInitialSearch = new URLSearchParams(window.location.search).get("table_search") || "";
+
+    function getTunnelListSearchText() {
+        return ($(".bootstrap-table .search input").val() || "").trim();
+    }
+
+    function syncTunnelListSearchUrl(searchText) {
+        var url = new URL(window.location.href);
+        if (searchText) {
+            url.searchParams.set("table_search", searchText);
+        } else {
+            url.searchParams.delete("table_search");
+        }
+        history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+
+    $(document).off('click.tunnelFormLink', '.list-form-link').on('click.tunnelFormLink', '.list-form-link', function () {
+        syncTunnelListSearchUrl(getTunnelListSearchText());
+    });
 
     function tunnelActionButton(action, path, id, btnClass, iconClass) {
         return '<a href="javascript:;" class="btn btn-outline ' + btnClass + ' tunnel-action"'
@@ -68,6 +87,7 @@
             }
         },
         search: true,
+        searchText: tunnelInitialSearch,
         contentType: "application/x-www-form-urlencoded",
         striped: true, // 设置为true会有隔行变色效果
         showHeader: true,
@@ -79,6 +99,7 @@
         pageList: [5, 10, 20, 50],//分页步进值
         detailView: true,
         smartDisplay: true, // 智能显示 pagination 和 cardview 等
+        onSearch: function (text) {syncTunnelListSearchUrl((text || "").trim());},
         onExpandRow: function () {$('body').setLang ('.detail-view');},
         onLoadSuccess:function (data) {$('body').setLang ('.detail-view');},
         onPostBody: function (data) { if ($(this)[0].locale != undefined ) $('body').setLang ('#table'); },
@@ -204,9 +225,9 @@
                 formatter: function (value, row, index) {
                     var buttons = ['<div class="btn-group">'];
                     buttons.push('<a href="' + indexBaseUrl + '/index/edit?id=' + row.Id
-                        + '" class="btn btn-outline btn-success"><i class="fa fa-edit"></i></a>');
+                        + '" class="btn btn-outline btn-success list-form-link"><i class="fa fa-edit"></i></a>');
                     buttons.push('<a href="' + indexBaseUrl + '/index/add?id=' + row.Id
-                        + '" class="btn btn-outline btn-primary"><i class="fa fa-copy"></i></a>');
+                        + '" class="btn btn-outline btn-primary list-form-link"><i class="fa fa-copy"></i></a>');
                     if (row.Status) {
                         buttons.push(tunnelActionButton('stop', '/index/stop', row.Id, 'btn-warning', 'fa-pause'));
                     } else {

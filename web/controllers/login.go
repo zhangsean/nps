@@ -52,6 +52,7 @@ func (self *LoginController) Verify() {
 		if !cpt.VerifyReq(self.Ctx.Request) {
 			self.Data["json"] = map[string]interface{}{"status": 0, "msg": "the verification code is wrong, please get it again and try again"}
 			self.ServeJSON()
+			return
 		}
 	}
 	if self.doLogin(username, password, true) {

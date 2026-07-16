@@ -58,21 +58,21 @@
             <div class="ibox-content">
                 <form class="m-t" onsubmit="return false">
                     <div class="form-group">
-                        <input name="username" class="form-control" placeholder="username" required=""
+                        <input name="username" class="form-control" placeholder="username" required="" tabindex="1"
                                langtag="word-username">
                     </div>
                     <div class="form-group">
-                        <input name="password" type="password" class="form-control" placeholder="password" required=""
+                        <input name="password" type="password" class="form-control" placeholder="password" required="" tabindex="2"
                                langtag="word-password">
                     </div>
                     {{if eq true .captcha_open}}
                         <div class="form-group">
                             {{create_captcha}}
-                            <input name="captcha" class="form-control" placeholder="captcha" required=""
+                            <input name="captcha" class="form-control" placeholder="captcha" required="" tabindex="3"
                                    langtag="word-captcha">
                         </div>
                     {{end}}
-                    <button onclick="login()" class="btn btn-primary block full-width m-b"
+                    <button onclick="login()" class="btn btn-primary block full-width m-b" tabindex="4"
                             langtag="word-login"></button>
                     {{if eq true .register_allow}}
                         <p class="text-muted text-center"><small langtag="info-noaccount"></small></p>
@@ -99,6 +99,20 @@
 <script type="text/javascript">
     window.nps = {"web_base_url": "{{.web_base_url}}" }
 
+    function refreshCaptcha() {
+        var img = $(".captcha-img");
+        if (!img.length) {
+            return;
+        }
+        var src = img.attr("src").split("?")[0];
+        img.attr("src", src + "?reload=" + (new Date()).getTime());
+        $("input[name='captcha']").val("").trigger("focus");
+    }
+
+    $(function () {
+        $(".captcha").attr("tabindex", "-1");
+    });
+
     // Login Page Flipbox control
     function login() {
         $.ajax({
@@ -110,6 +124,7 @@
                     window.location.href = "{{.web_base_url}}/index/index"
                 } else {
                     npsNotify(res.msg, res.status)
+                    refreshCaptcha()
                 }
             }
         })

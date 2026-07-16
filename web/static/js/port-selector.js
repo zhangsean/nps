@@ -4,6 +4,13 @@
         return isNaN(n) ? def : n;
     }
 
+    function portSegmentStart(port) {
+        if (port <= 0 || port > 65535) {
+            return 1;
+        }
+        return Math.max(1, Math.floor(port / 100) * 100);
+    }
+
     function PortSelector(opts) {
         this.taskId = opts.taskId || 0;
         this.webBaseUrl = opts.webBaseUrl || "";
@@ -131,10 +138,16 @@
     PortSelector.prototype.getInitialStart = function () {
         var currentValue = intValue(this.$port.val(), 0);
         var ranges = this.state.data ? this.state.data.ranges : [];
+        var segmentStart = portSegmentStart(currentValue);
         var i;
+
+        if (currentValue > 0 && currentValue <= 65535 && !ranges.length) {
+            return segmentStart;
+        }
+
         for (i = 0; i < ranges.length; i++) {
             if (currentValue >= ranges[i].start && currentValue <= ranges[i].end) {
-                return currentValue;
+                return Math.max(ranges[i].start, segmentStart);
             }
         }
         if (ranges.length > 0) {

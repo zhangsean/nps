@@ -18,7 +18,7 @@
                 <div class="content">
                     <div class="table-responsive">
                         <div id="toolbar">
-                            <a href="{{.web_base_url}}/index/addhost?vkey={{.task_id}}&client_id={{.client_id}}" class="btn btn-primary dim">
+                            <a href="{{.web_base_url}}/index/addhost?vkey={{.task_id}}&client_id={{.client_id}}" class="btn btn-primary dim list-form-link">
                             <i class="fa fa-fw fa-lg fa-plus"></i> <span langtag="word-add"></span></a>
                         </div>
                         <table id="taskList_table" class="table-striped table-hover"
@@ -37,6 +37,25 @@
 
 <script>
     var hostBaseUrl = "{{.web_base_url}}";
+    var hostInitialSearch = new URLSearchParams(window.location.search).get("table_search") || "";
+
+    function getHostListSearchText() {
+        return ($(".bootstrap-table .search input").val() || "").trim();
+    }
+
+    function syncHostListSearchUrl(searchText) {
+        var url = new URL(window.location.href);
+        if (searchText) {
+            url.searchParams.set("table_search", searchText);
+        } else {
+            url.searchParams.delete("table_search");
+        }
+        history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+
+    $(document).off('click.hostFormLink', '.list-form-link').on('click.hostFormLink', '.list-form-link', function () {
+        syncHostListSearchUrl(getHostListSearchText());
+    });
 
     function hostActionButton(action, path, id, btnClass, iconClass) {
         return '<a href="javascript:;" class="btn btn-outline ' + btnClass + ' host-action"'
@@ -67,6 +86,7 @@
             }
         },
         search: true,
+        searchText: hostInitialSearch,
         contentType: "application/x-www-form-urlencoded",
         striped: true, // 设置为true会有隔行变色效果
         showHeader: true,
@@ -78,6 +98,7 @@
         pageList: [5, 10, 20, 50],//分页步进值
         detailView: true,
         smartDisplay: true, // 智能显示 pagination 和 cardview 等
+        onSearch: function (text) {syncHostListSearchUrl((text || "").trim());},
         onExpandRow: function () {$('body').setLang ('.detail-view');},
         onPostBody: function (data) { if ($(this)[0].locale != undefined ) $('body').setLang ('#table'); },
         detailFormatter: function (index, row, element) {
@@ -170,9 +191,9 @@
                 formatter: function (value, row, index) {
                     var buttons = ['<div class="btn-group">'];
                     buttons.push('<a href="' + hostBaseUrl + '/index/edithost?id=' + row.Id
-                        + '" class="btn btn-outline btn-success"><i class="fa fa-edit"></i></a>');
+                        + '" class="btn btn-outline btn-success list-form-link"><i class="fa fa-edit"></i></a>');
                     buttons.push('<a href="' + hostBaseUrl + '/index/addhost?id=' + row.Id
-                        + '" class="btn btn-outline btn-primary"><i class="fa fa-copy"></i></a>');
+                        + '" class="btn btn-outline btn-primary list-form-link"><i class="fa fa-copy"></i></a>');
                     buttons.push(hostActionButton('delete', '/index/delhost', row.Id, 'btn-danger', 'fa-trash'));
                     buttons.push('</div>');
                     return buttons.join('');
