@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -24,15 +25,50 @@ func NormalizeRoot(root string) string {
 	if root == "" {
 		return DefaultRoot
 	}
+	if isBackslashDrivePath(root) {
+		return path.Clean(strings.ReplaceAll(root, `\`, "/"))
+	}
+	if strings.HasPrefix(root, "/") {
+		cleanRoot := path.Clean(root)
+		if cleanRoot == DefaultRoot {
+			return DefaultRoot
+		}
+		return cleanRoot
+	}
 	if filepath.Clean(root) == filepath.Clean(DefaultRoot) {
 		return DefaultRoot
 	}
 	return filepath.Clean(root)
 }
 
+func filesystemRoot(root string) string {
+	root = NormalizeRoot(root)
+	if runtime.GOOS == "windows" && isMsysDrivePath(root) {
+		if len(root) == 2 {
+			return strings.ToUpper(root[1:2]) + `:\`
+		}
+		return strings.ToUpper(root[1:2]) + ":" + filepath.FromSlash(root[2:])
+	}
+	return filepath.Clean(root)
+}
+
+func isMsysDrivePath(root string) bool {
+	return len(root) >= 2 &&
+		root[0] == '/' &&
+		((root[1] >= 'a' && root[1] <= 'z') || (root[1] >= 'A' && root[1] <= 'Z')) &&
+		(len(root) == 2 || root[2] == '/')
+}
+
+func isBackslashDrivePath(root string) bool {
+	return len(root) >= 2 &&
+		root[0] == '\\' &&
+		((root[1] >= 'a' && root[1] <= 'z') || (root[1] >= 'A' && root[1] <= 'Z')) &&
+		(len(root) == 2 || root[2] == '\\' || root[2] == '/')
+}
+
 func NewBrowser(root string, stripPrefix string) http.Handler {
 	return &Browser{
-		root:        NormalizeRoot(root),
+		root:        filesystemRoot(root),
 		stripPrefix: normalizeStripPrefix(stripPrefix),
 	}
 }
@@ -186,5 +222,5 @@ func humanSize(size int64) string {
 }
 
 func EnsureRoot(root string) error {
-	return os.MkdirAll(NormalizeRoot(root), 0755)
+	return os.MkdirAll(filesystemRoot(root), 0755)
 }

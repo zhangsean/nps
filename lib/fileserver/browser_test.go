@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -64,5 +65,19 @@ func TestBrowserRedirectKeepsStripPrefix(t *testing.T) {
 func TestNormalizeRootDefault(t *testing.T) {
 	if got := NormalizeRoot(""); got != DefaultRoot {
 		t.Fatalf("NormalizeRoot empty = %q, want %q", got, DefaultRoot)
+	}
+}
+
+func TestNormalizeRootPreservesMsysDrivePath(t *testing.T) {
+	if got := NormalizeRoot("/d/tmp"); got != "/d/tmp" {
+		t.Fatalf("NormalizeRoot /d/tmp = %q, want /d/tmp", got)
+	}
+	if got := NormalizeRoot(`\d\tmp`); got != "/d/tmp" {
+		t.Fatalf("NormalizeRoot \\\\d\\\\tmp = %q, want /d/tmp", got)
+	}
+	if runtime.GOOS == "windows" {
+		if got := filesystemRoot("/d/tmp"); got != `D:\tmp` {
+			t.Fatalf("filesystemRoot /d/tmp = %q, want D:\\tmp", got)
+		}
 	}
 }
