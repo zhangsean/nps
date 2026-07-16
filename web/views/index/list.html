@@ -40,6 +40,7 @@
     var tunnelType = "{{.type}}";
     var tunnelClientId = "{{.client_id}}";
     var tunnelInitialSearch = new URLSearchParams(window.location.search).get("table_search") || "";
+    var isFileTunnelList = tunnelType == "file";
 
     function getTunnelListSearchText() {
         return ($(".bootstrap-table .search input").val() || "").trim();
@@ -166,11 +167,26 @@
                 visible: true//false表示不显示
             },
             {
+                field: 'StripPre',//域值
+                title: '<span langtag="word-stripprefix"></span>',//标题
+                halign: 'center',
+                visible: isFileTunnelList,//false表示不显示
+                formatter: function (value, row, index) {
+                    return value || '/'
+                }
+            },
+            {
                 field: 'Target',//域值
-                title: '<span langtag="word-target"></span>',//标题
+                title: isFileTunnelList ? '<span langtag="word-targetpath"></span>' : '<span langtag="word-target"></span>',//标题
                 halign: 'center',
                 visible: true,//false表示不显示
                 formatter: function (value, row, index) {
+                    if (row.Mode == "file") {
+                        return row.LocalPath || ''
+                    }
+                    if (!row.Target) {
+                        return ''
+                    }
                     return row.Target.TargetStr
                 }
             },

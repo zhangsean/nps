@@ -514,6 +514,10 @@
 		<zh-CN>目标 (IP:端口)</zh-CN>
 		<en-US>Target (IP:Port)</en-US>
 	</lang>
+	<lang id="word-targetpath">
+		<zh-CN>目标路径</zh-CN>
+		<en-US>Target path</en-US>
+	</lang>
 	<lang id="word-tcpconnections_established">
 		<zh-CN>TCP 连接 (已建立)</zh-CN>
 		<en-US>TCP connections (establish)</en-US>
