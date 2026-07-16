@@ -386,7 +386,7 @@ func (s *Bridge) register(c *conn.Conn) {
 func (s *Bridge) SendLinkInfo(clientId int, link *conn.Link, t *file.Tunnel) (target net.Conn, err error) {
 	//if the proxy type is local
 	if link.LocalProxy {
-		target, err = s.dialLocalProxyTargetWithRetry(link.ConnType, link.Host, link.TargetConnectRetryHook)
+		target, err = s.dialLocalProxyTargetsWithRetry(link.ConnType, linkTargetHosts(link), link.TargetConnectRetryHook)
 		return
 	}
 	if v, ok := s.Client.Load(clientId); ok {
@@ -434,12 +434,21 @@ func (s *Bridge) SendLinkInfo(clientId int, link *conn.Link, t *file.Tunnel) (ta
 }
 
 func (s *Bridge) dialLocalProxyTargetWithRetry(connType string, targetHost string, retryHook conn.TargetConnectRetryHook) (target net.Conn, err error) {
+	return s.dialLocalProxyTargetsWithRetry(connType, []string{targetHost}, retryHook)
+}
+
+func (s *Bridge) dialLocalProxyTargetsWithRetry(connType string, targetHosts []string, retryHook conn.TargetConnectRetryHook) (target net.Conn, err error) {
 	connType = localProxyTargetConnType(connType)
+	targetHosts = normalizeTargetHosts("", targetHosts)
+	if len(targetHosts) == 0 {
+		return nil, net.InvalidAddrError("empty target host")
+	}
 	attempts := s.targetConnectRetryCount + 1
 	if attempts < 1 {
 		attempts = 1
 	}
 	for attempt := 1; attempt <= attempts; attempt++ {
+		targetHost := targetHosts[(attempt-1)%len(targetHosts)]
 		target, err = net.DialTimeout(connType, targetHost, s.targetConnectTimeout)
 		if err == nil {
 			if attempt > 1 {
@@ -472,6 +481,34 @@ func (s *Bridge) dialLocalProxyTargetWithRetry(connType string, targetHost strin
 		}
 	}
 	return nil, err
+}
+
+func linkTargetHosts(link *conn.Link) []string {
+	if link == nil {
+		return nil
+	}
+	return normalizeTargetHosts(link.Host, link.TargetHosts)
+}
+
+func normalizeTargetHosts(primary string, targetHosts []string) []string {
+	targets := make([]string, 0, len(targetHosts)+1)
+	seen := make(map[string]struct{}, len(targetHosts)+1)
+	add := func(targetHost string) {
+		targetHost = strings.TrimSpace(targetHost)
+		if targetHost == "" {
+			return
+		}
+		if _, ok := seen[targetHost]; ok {
+			return
+		}
+		seen[targetHost] = struct{}{}
+		targets = append(targets, targetHost)
+	}
+	add(primary)
+	for _, targetHost := range targetHosts {
+		add(targetHost)
+	}
+	return targets
 }
 
 func randomTargetConnectRetryDelay(maxInterval time.Duration) time.Duration {

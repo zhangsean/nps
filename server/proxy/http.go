@@ -231,7 +231,8 @@ reset:
 		logs.Warn("auth error", err, r.RemoteAddr)
 		return
 	}
-	if targetAddr, err = host.Target.GetRandomTarget(); err != nil {
+	targetHosts, err := host.Target.GetRoundRobinTargets()
+	if err != nil {
 		failStatus = http.StatusBadGateway
 		accessLog.SetStatusCode(failStatus)
 		accessLog.SetResponseBytes(s.httpErrorResponseBytes(failStatus))
@@ -239,6 +240,7 @@ reset:
 		logs.Warn(err.Error())
 		return
 	}
+	targetAddr = targetHosts[0]
 	accessLog.SetTarget(targetAddr)
 
 	// 判断访问地址是否在黑名单内
@@ -251,6 +253,7 @@ reset:
 	}
 
 	lk = conn.NewLink("http", targetAddr, host.Client.Cnf.Crypt, host.Client.Cnf.Compress, r.RemoteAddr, host.Target.LocalProxy)
+	lk.SetTargetHosts(targetHosts)
 	lk.SetTargetConnectRetryHook(accessLog.TargetConnectRetryHook("local_proxy"))
 	if target, err = s.bridge.SendLinkInfo(host.Client.Id, lk, nil); err != nil {
 		failStatus = http.StatusBadGateway

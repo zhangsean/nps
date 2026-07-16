@@ -52,11 +52,13 @@ func (rp *HttpReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request)
 		rw.Write([]byte("Unauthorized"))
 		return
 	}
-	if targetAddr, err = host.Target.GetRandomTarget(); err != nil {
+	targetHosts, err := host.Target.GetRoundRobinTargets()
+	if err != nil {
 		rw.WriteHeader(http.StatusBadGateway)
 		rw.Write([]byte("502 Bad Gateway"))
 		return
 	}
+	targetAddr = targetHosts[0]
 	accessLog := newHTTPAccessLogRecord(req, getRequestRemoteAddr(req, ""), host, targetAddr, false)
 	accessLog.SetStatusCode(http.StatusSwitchingProtocols)
 	accessLog.SetRequestBytes(estimateHTTPAccessLogRequestBytes(req))
@@ -65,6 +67,7 @@ func (rp *HttpReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request)
 
 	req = req.WithContext(context.WithValue(req.Context(), "host", host))
 	req = req.WithContext(context.WithValue(req.Context(), "target", targetAddr))
+	req = req.WithContext(context.WithValue(req.Context(), "targetHosts", targetHosts))
 	req = req.WithContext(context.WithValue(req.Context(), "req", req))
 	req = req.WithContext(context.WithValue(req.Context(), "accessLog", accessLog))
 
@@ -124,9 +127,11 @@ func WebSocketHttpReverseProxy(s *httpServer) *HttpReverseProxy {
 				r := ctx.Value("req").(*http.Request)
 				host = ctx.Value("host").(*file.Host)
 				targetAddr = ctx.Value("target").(string)
+				targetHosts := ctx.Value("targetHosts").([]string)
 				accessLog := ctx.Value("accessLog").(*httpAccessLogRecord)
 
 				lk = conn.NewLink("http", targetAddr, host.Client.Cnf.Crypt, host.Client.Cnf.Compress, r.RemoteAddr, host.Target.LocalProxy)
+				lk.SetTargetHosts(targetHosts)
 				lk.SetTargetConnectRetryHook(accessLog.TargetConnectRetryHook("local_proxy"))
 				if target, err = s.bridge.SendLinkInfo(host.Client.Id, lk, nil); err != nil {
 					logs.Notice("connect to target %s error %s", lk.Host, err)
@@ -162,9 +167,11 @@ func WebSocketHttpReverseProxy(s *httpServer) *HttpReverseProxy {
 		r := ctx.Value("req").(*http.Request)
 		host = ctx.Value("host").(*file.Host)
 		targetAddr = ctx.Value("target").(string)
+		targetHosts := ctx.Value("targetHosts").([]string)
 		accessLog := ctx.Value("accessLog").(*httpAccessLogRecord)
 
 		lk = conn.NewLink("tcp", targetAddr, host.Client.Cnf.Crypt, host.Client.Cnf.Compress, r.RemoteAddr, host.Target.LocalProxy)
+		lk.SetTargetHosts(targetHosts)
 		lk.SetTargetConnectRetryHook(accessLog.TargetConnectRetryHook("local_proxy"))
 		if target, err = s.bridge.SendLinkInfo(host.Client.Id, lk, nil); err != nil {
 			logs.Notice("connect to target %s error %s", lk.Host, err)

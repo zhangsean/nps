@@ -144,14 +144,17 @@ func (https *HttpsServer) handleHttps2(c net.Conn, hostName string, rb []byte, r
 		return
 	}
 	errText := ""
-	if targetAddr, err = host.Target.GetRandomTarget(); err != nil {
+	targetHosts, err := host.Target.GetRoundRobinTargets()
+	if err != nil {
 		errText = err.Error()
 		logs.Warn(err.Error())
+	} else {
+		targetAddr = targetHosts[0]
 	}
 	logs.Trace("new https connection,clientId %d,host %s,remote address %s", host.Client.Id, r.Host, c.RemoteAddr().String())
 	accessLog := newHTTPAccessLogRecord(r, c.RemoteAddr().String(), host, targetAddr, true)
 	counterConn := newHTTPAccessLogReadCounterConn(c, int64(len(rb)))
-	if err = https.DealClient(conn.NewConn(counterConn), host.Client, targetAddr, rb, common.CONN_TCP, nil, host.Client.Flow, host.Target.LocalProxy, nil, accessLog.TargetConnectRetryHook("local_proxy")); err != nil {
+	if err = https.DealClient(conn.NewConn(counterConn), host.Client, targetAddr, rb, common.CONN_TCP, nil, host.Client.Flow, host.Target.LocalProxy, nil, targetHosts, accessLog.TargetConnectRetryHook("local_proxy")); err != nil {
 		errText = err.Error()
 		accessLog.SetStatusCode(http.StatusBadGateway)
 		accessLog.SetResponseBytes(https.httpErrorResponseBytes(http.StatusBadGateway))
@@ -201,14 +204,17 @@ func (https *HttpsServer) handleHttps(c net.Conn) {
 		return
 	}
 	errText := ""
-	if targetAddr, err = host.Target.GetRandomTarget(); err != nil {
+	targetHosts, err := host.Target.GetRoundRobinTargets()
+	if err != nil {
 		errText = err.Error()
 		logs.Warn(err.Error())
+	} else {
+		targetAddr = targetHosts[0]
 	}
 	logs.Trace("new https connection,clientId %d,host %s,remote address %s", host.Client.Id, r.Host, c.RemoteAddr().String())
 	accessLog := newHTTPAccessLogRecord(r, c.RemoteAddr().String(), host, targetAddr, true)
 	counterConn := newHTTPAccessLogReadCounterConn(c, int64(len(rb)))
-	if err = https.DealClient(conn.NewConn(counterConn), host.Client, targetAddr, rb, common.CONN_TCP, nil, host.Client.Flow, host.Target.LocalProxy, nil, accessLog.TargetConnectRetryHook("local_proxy")); err != nil {
+	if err = https.DealClient(conn.NewConn(counterConn), host.Client, targetAddr, rb, common.CONN_TCP, nil, host.Client.Flow, host.Target.LocalProxy, nil, targetHosts, accessLog.TargetConnectRetryHook("local_proxy")); err != nil {
 		errText = err.Error()
 		accessLog.SetStatusCode(http.StatusBadGateway)
 		accessLog.SetResponseBytes(https.httpErrorResponseBytes(http.StatusBadGateway))

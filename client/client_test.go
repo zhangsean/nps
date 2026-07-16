@@ -96,6 +96,36 @@ func TestDialTargetWithRetrySleepsBeforeRetry(t *testing.T) {
 	}
 }
 
+func TestDialTargetsWithRetryPollsTargets(t *testing.T) {
+	badListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen bad target error: %v", err)
+	}
+	badTarget := badListener.Addr().String()
+	_ = badListener.Close()
+
+	goodListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen good target error: %v", err)
+	}
+	defer goodListener.Close()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		conn, err := goodListener.Accept()
+		if err == nil {
+			_ = conn.Close()
+		}
+	}()
+
+	conn, err := dialTargetsWithRetry("tcp", []string{badTarget, goodListener.Addr().String()}, time.Second, 1, 0)
+	if err != nil {
+		t.Fatalf("dialTargetsWithRetry returned error: %v", err)
+	}
+	_ = conn.Close()
+	<-done
+}
+
 func TestRandomTargetConnectRetryDelayRange(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		delay := randomTargetConnectRetryDelay(500 * time.Millisecond)

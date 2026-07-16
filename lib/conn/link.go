@@ -17,7 +17,8 @@ func NewSecret(p string, conn *Conn) *Secret {
 type Link struct {
 	ConnType               string //连接类型
 	Host                   string //目标
-	Crypt                  bool   //加密
+	TargetHosts            []string
+	Crypt                  bool //加密
 	Compress               bool
 	LocalProxy             bool
 	RemoteAddr             string
@@ -92,6 +93,16 @@ func LinkRetryInterval(retryInterval time.Duration) Option {
 func (l *Link) SetTargetConnectRetryHook(hook TargetConnectRetryHook) {
 	if l != nil {
 		l.TargetConnectRetryHook = hook
+	}
+}
+
+func (l *Link) SetTargetHosts(targetHosts []string) {
+	if l == nil {
+		return
+	}
+	l.TargetHosts = append([]string(nil), targetHosts...)
+	if l.Host == "" && len(l.TargetHosts) > 0 {
+		l.Host = l.TargetHosts[0]
 	}
 }
 

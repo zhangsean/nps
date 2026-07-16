@@ -296,9 +296,10 @@ func (s *TRPClient) handleChan(src net.Conn) {
 	}
 	//host for target processing
 	lk.Host = common.FormatAddress(lk.Host)
+	lk.TargetHosts = formatTargetHosts(lk.Host, lk.TargetHosts)
 	//if Conn type is http, read the request and log
 	if lk.ConnType == "http" {
-		if targetConn, err := dialTargetWithRetry(common.CONN_TCP, lk.Host, lk.Option.Timeout, lk.Option.RetryCount, lk.Option.RetryInterval); err != nil {
+		if targetConn, err := dialTargetsWithRetry(common.CONN_TCP, lk.TargetHosts, lk.Option.Timeout, lk.Option.RetryCount, lk.Option.RetryInterval); err != nil {
 			logs.Warn("connect to %s error %s", lk.Host, err.Error())
 			src.Close()
 		} else {
@@ -331,7 +332,7 @@ func (s *TRPClient) handleChan(src net.Conn) {
 		s.handleUdp(src)
 	}
 	//connect to target if conn type is tcp or udp
-	if targetConn, err := dialTargetWithRetry(lk.ConnType, lk.Host, lk.Option.Timeout, lk.Option.RetryCount, lk.Option.RetryInterval); err != nil {
+	if targetConn, err := dialTargetsWithRetry(lk.ConnType, lk.TargetHosts, lk.Option.Timeout, lk.Option.RetryCount, lk.Option.RetryInterval); err != nil {
 		logs.Warn("connect to %s error %s", lk.Host, err.Error())
 		src.Close()
 	} else {
@@ -341,11 +342,20 @@ func (s *TRPClient) handleChan(src net.Conn) {
 }
 
 func dialTargetWithRetry(connType string, targetHost string, timeout time.Duration, retryCount int, retryInterval time.Duration) (targetConn net.Conn, err error) {
+	return dialTargetsWithRetry(connType, []string{targetHost}, timeout, retryCount, retryInterval)
+}
+
+func dialTargetsWithRetry(connType string, targetHosts []string, timeout time.Duration, retryCount int, retryInterval time.Duration) (targetConn net.Conn, err error) {
+	targetHosts = formatTargetHosts("", targetHosts)
+	if len(targetHosts) == 0 {
+		return nil, net.InvalidAddrError("empty target host")
+	}
 	attempts := retryCount + 1
 	if attempts < 1 {
 		attempts = 1
 	}
 	for attempt := 1; attempt <= attempts; attempt++ {
+		targetHost := targetHosts[(attempt-1)%len(targetHosts)]
 		targetConn, err = net.DialTimeout(connType, targetHost, timeout)
 		if err == nil {
 			if attempt > 1 {
@@ -365,6 +375,28 @@ func dialTargetWithRetry(connType string, targetHost string, timeout time.Durati
 		}
 	}
 	return nil, err
+}
+
+func formatTargetHosts(primary string, targetHosts []string) []string {
+	formatted := make([]string, 0, len(targetHosts)+1)
+	seen := make(map[string]struct{}, len(targetHosts)+1)
+	add := func(targetHost string) {
+		targetHost = strings.TrimSpace(targetHost)
+		if targetHost == "" {
+			return
+		}
+		targetHost = common.FormatAddress(targetHost)
+		if _, ok := seen[targetHost]; ok {
+			return
+		}
+		seen[targetHost] = struct{}{}
+		formatted = append(formatted, targetHost)
+	}
+	add(primary)
+	for _, targetHost := range targetHosts {
+		add(targetHost)
+	}
+	return formatted
 }
 
 func randomTargetConnectRetryDelay(maxInterval time.Duration) time.Duration {

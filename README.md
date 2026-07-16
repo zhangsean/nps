@@ -28,6 +28,11 @@ https://natnps.com/
 ## 更新日志
 - 未发布
 
+- 2026-07-16  v0.27.19
+  - **优化**：当前域名或隧道配置多个 target 时，目标连接重试会在当前 target 列表内继续轮询尝试，避免单个 target 不可达时反复重试同一地址。
+  - **优化**：nps LocalProxy 本地代理目标连接重试同样支持按当前 target 列表轮询，保持与 npc 目标连接重试策略一致。
+  - **修复**：修正 SOCKS5 UDP 日志中端口输出方式，避免将端口号按单个字符输出。
+
 - 2026-07-15  v0.27.18
   - **新增**：`nps.conf` 增加 `target_connect_retry_interval_ms`，支持目标连接失败后、下一次重试前随机等待，默认 0 不等待；nps LocalProxy 触发目标连接重试时会写入 `event=target_connect_retry` 的 access.log 事件。
   - **修复**：HTTP 代理连接目标后端失败时返回 502，等待后端响应超时时返回 504，避免将上游错误误报为 404。

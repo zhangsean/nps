@@ -198,22 +198,41 @@ type MultiAccount struct {
 }
 
 func (s *Target) GetRandomTarget() (string, error) {
-	if s.TargetArr == nil {
-		s.TargetArr = strings.Split(s.TargetStr, "\n")
+	targets, err := s.GetRoundRobinTargets()
+	if err != nil {
+		return "", err
 	}
-	if len(s.TargetArr) == 1 {
-		return s.TargetArr[0], nil
-	}
-	if len(s.TargetArr) == 0 {
-		return "", errors.New("all inward-bending targets are offline")
-	}
+	return targets[0], nil
+}
+
+func (s *Target) GetRoundRobinTargets() ([]string, error) {
 	s.Lock()
 	defer s.Unlock()
+	if s.TargetArr == nil {
+		s.TargetArr = trimTargetArr(strings.Split(s.TargetStr, "\n"))
+	}
+	if len(s.TargetArr) == 0 {
+		return nil, errors.New("all inward-bending targets are offline")
+	}
 	if s.nowIndex >= len(s.TargetArr)-1 {
 		s.nowIndex = -1
 	}
 	s.nowIndex++
-	return s.TargetArr[s.nowIndex], nil
+	targets := make([]string, 0, len(s.TargetArr))
+	targets = append(targets, s.TargetArr[s.nowIndex:]...)
+	targets = append(targets, s.TargetArr[:s.nowIndex]...)
+	return targets, nil
+}
+
+func trimTargetArr(targets []string) []string {
+	result := make([]string, 0, len(targets))
+	for _, target := range targets {
+		target = strings.TrimSpace(target)
+		if target != "" {
+			result = append(result, target)
+		}
+	}
+	return result
 }
 
 type Glob struct {
