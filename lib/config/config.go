@@ -8,6 +8,7 @@ import (
 
 	"ehang.io/nps/lib/common"
 	"ehang.io/nps/lib/file"
+	"ehang.io/nps/lib/fileserver"
 )
 
 type CommonConfig struct {
@@ -270,6 +271,9 @@ func dealTunnel(s string) *file.Tunnel {
 				}
 			}
 		}
+	}
+	if t.Mode == "file" {
+		t.LocalPath = fileserver.NormalizeRoot(t.LocalPath)
 	}
 	return t
 

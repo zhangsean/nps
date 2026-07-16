@@ -25,7 +25,7 @@
                                 <option value="socks5" langtag="scheme-socks5"></option>
                                 <option value="secret" langtag="scheme-secret"></option>
                                 <option value="p2p" langtag="scheme-p2p"></option>
-                            {{/*<option value="file" langtag="scheme-file"></option>*/}}
+                                <option value="file" langtag="scheme-file"></option>
                             </select>
                         </div>
                     </div>
@@ -187,7 +187,43 @@
     arr["httpProxy"] = ["client_id", "port"]
     arr["secret"] = ["client_id", "target", "password"]
     arr["p2p"] = ["client_id", "target", "password"]
-    arr["file"] = ["client_id", "port", "local_path", "strip_pre"]
+    arr["file"] = ["client_id", "port", "local_path", "strip_pre", "local_proxy"]
+
+    function syncLocalProxyClient() {
+        var cid = $('#client_id')
+        var localProxy = $('#local_proxy')
+        if (!cid.length || !localProxy.length) {
+            return
+        }
+        var useLocalProxy = localProxy.val() == 1
+        cid.attr('readonly', useLocalProxy)
+        if (useLocalProxy) {
+            oldId = cid.val()
+            if (oldId == '客户端 ID') {
+                oldId = ''
+            }
+            if (oldId != '1') {
+                cid.attr('oldId', oldId)
+            }
+            cid.val(1)
+        } else {
+            var oldId = cid.attr('oldId')
+            cid.val(oldId === undefined ? '' : oldId)
+        }
+    }
+
+    function applyFileDefaults(forceLocalProxy) {
+        if ($("#type").val() == "file") {
+            var localPath = $('input[name="local_path"]')
+            if (localPath.val() == '') {
+                localPath.val('/files')
+            }
+            if (forceLocalProxy && $('#local_proxy').length) {
+                $('#local_proxy').val(1)
+            }
+        }
+        syncLocalProxyClient()
+    }
 
     function resetForm() {
         $(".form-group[id]").css("display", "none");
@@ -202,25 +238,16 @@
     $(function () {
         $("#type").val('{{.t.Mode}}');
         resetForm()
+        applyFileDefaults(false)
         $("#type").on("change", function () {
             resetForm()
+            applyFileDefaults($("#type").val() == "file")
         })
         $("#use_client").on("change", function () {
             resetForm()
         })
         $("#local_proxy").on("change", function (e) {
-            cid = $('#client_id')
-            cid.attr('readonly', $(this).val() == 1)
-            if ($(this).val() == 1) {
-                oldId = cid.val()
-                if (oldId == '客户端 ID') {
-                    oldId = ''
-                }
-                cid.attr('oldId', oldId)
-                cid.val(1)
-            } else {
-                cid.val(cid.attr('oldId'))
-            }
+            syncLocalProxyClient()
         })
         initPortSelector({
             taskId: {{.t.Id}},

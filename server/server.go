@@ -127,8 +127,14 @@ func dealClientFlow() {
 func NewMode(Bridge *bridge.Bridge, c *file.Tunnel) proxy.Service {
 	var service proxy.Service
 	switch c.Mode {
-	case "tcp", "file":
+	case "tcp":
 		service = proxy.NewTunnelModeServer(proxy.ProcessTunnel, Bridge, c)
+	case "file":
+		if c.Target != nil && c.Target.LocalProxy {
+			service = proxy.NewLocalFileServer(c)
+		} else {
+			service = proxy.NewTunnelModeServer(proxy.ProcessTunnel, Bridge, c)
+		}
 	case "socks5":
 		service = proxy.NewSock5ModeServer(Bridge, c)
 	case "httpProxy":

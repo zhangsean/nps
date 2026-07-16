@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"ehang.io/nps/lib/file"
+	"ehang.io/nps/lib/fileserver"
 	"ehang.io/nps/server"
 	"ehang.io/nps/server/tool"
 
@@ -13,6 +14,22 @@ import (
 
 type IndexController struct {
 	BaseController
+}
+
+func normalizeTunnelFormDefaults(t *file.Tunnel) {
+	if t.Target == nil {
+		t.Target = &file.Target{}
+	}
+	if t.Mode == "file" {
+		t.LocalPath = fileserver.NormalizeRoot(t.LocalPath)
+	}
+}
+
+func getTunnelClientId(t *file.Tunnel, requestedClientId int) int {
+	if t.Target != nil && t.Target.LocalProxy {
+		return 1
+	}
+	return requestedClientId
 }
 
 func (s *IndexController) Index() {
@@ -137,6 +154,7 @@ func (s *IndexController) Add() {
 			StripPre:  s.getEscapeString("strip_pre"),
 			Flow:      &file.Flow{},
 		}
+		normalizeTunnelFormDefaults(t)
 
 		if t.Port <= 0 {
 			t.Port = tool.GenerateServerPort(t.Mode)
@@ -146,7 +164,7 @@ func (s *IndexController) Add() {
 			s.AjaxErr("The port cannot be opened because it may has been occupied or is no longer allowed.")
 		}
 		var err error
-		if t.Client, err = file.GetDb().GetClient(s.GetIntNoErr("client_id")); err != nil {
+		if t.Client, err = file.GetDb().GetClient(getTunnelClientId(t, s.GetIntNoErr("client_id"))); err != nil {
 			s.AjaxErr(err.Error())
 		}
 		if t.Client.MaxTunnelNum != 0 && t.Client.GetTunnelNum() >= t.Client.MaxTunnelNum {
@@ -188,7 +206,11 @@ func (s *IndexController) Edit() {
 		if t, err := file.GetDb().GetTask(id); err != nil {
 			s.error()
 		} else {
-			if client, err := file.GetDb().GetClient(s.GetIntNoErr("client_id")); err != nil {
+			requestedClientId := s.GetIntNoErr("client_id")
+			if s.GetBoolNoErr("local_proxy") {
+				requestedClientId = 1
+			}
+			if client, err := file.GetDb().GetClient(requestedClientId); err != nil {
 				s.AjaxErr("modified error,the client is not exist")
 				return
 			} else {
@@ -215,6 +237,13 @@ func (s *IndexController) Edit() {
 			t.StripPre = s.getEscapeString("strip_pre")
 			t.Remark = s.getEscapeString("remark")
 			t.Target.LocalProxy = s.GetBoolNoErr("local_proxy")
+			normalizeTunnelFormDefaults(t)
+			if client, err := file.GetDb().GetClient(getTunnelClientId(t, t.Client.Id)); err != nil {
+				s.AjaxErr("modified error,the client is not exist")
+				return
+			} else {
+				t.Client = client
+			}
 			file.GetDb().UpdateTask(t)
 			server.StopServer(t.Id)
 			server.StartTask(t.Id)

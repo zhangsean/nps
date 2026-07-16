@@ -14,6 +14,7 @@ import (
 	"ehang.io/nps/lib/conn"
 	"ehang.io/nps/lib/crypt"
 	"ehang.io/nps/lib/file"
+	"ehang.io/nps/lib/fileserver"
 	"ehang.io/nps/server/proxy"
 	"github.com/astaxie/beego/logs"
 	"github.com/xtaci/kcp-go"
@@ -68,8 +69,13 @@ func startLocalFileServer(config *config.CommonConfig, t *file.Tunnel, vkey stri
 		logs.Error("Local connection server failed ", err.Error())
 		return
 	}
+	t.LocalPath = fileserver.NormalizeRoot(t.LocalPath)
+	if err := fileserver.EnsureRoot(t.LocalPath); err != nil {
+		logs.Error("create local file root failed ", err.Error())
+		return
+	}
 	srv := &http.Server{
-		Handler: http.StripPrefix(t.StripPre, http.FileServer(http.Dir(t.LocalPath))),
+		Handler: fileserver.NewBrowser(t.LocalPath, t.StripPre),
 	}
 	logs.Info("start local file system, local path %s, strip prefix %s ,remote port %s ", t.LocalPath, t.StripPre, t.Ports)
 	fileServer = append(fileServer, srv)
