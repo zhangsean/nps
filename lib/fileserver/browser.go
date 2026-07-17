@@ -19,6 +19,7 @@ import (
 
 const DefaultRoot = "/files"
 const uploadAuthCookie = "nps_file_upload_auth"
+const browseAuthCookie = "nps_file_browse_auth"
 
 const directoryPageStyle = `
 :root {
@@ -123,9 +124,15 @@ a.crumb:hover {
 .login-corner {
   grid-column: 2;
   grid-row: 1;
+  display: inline-flex;
+  gap: 8px;
+  align-items: flex-start;
   justify-self: end;
   align-self: start;
   z-index: 5;
+}
+.login-corner form {
+  display: inline-flex;
 }
 .login-menu {
   position: relative;
@@ -538,6 +545,8 @@ tbody tr:last-child td {
 `
 
 type BrowserOptions struct {
+	AllowBrowse    bool
+	BrowsePassword string
 	AllowUpload    bool
 	UploadPassword string
 }
@@ -545,6 +554,8 @@ type BrowserOptions struct {
 type Browser struct {
 	root           string
 	stripPrefix    string
+	allowBrowse    bool
+	browsePassword string
 	allowUpload    bool
 	uploadPassword string
 }
@@ -603,6 +614,8 @@ func NewBrowserWithOptions(root string, stripPrefix string, options BrowserOptio
 	return &Browser{
 		root:           filesystemRoot(root),
 		stripPrefix:    normalizeStripPrefix(stripPrefix),
+		allowBrowse:    options.AllowBrowse,
+		browsePassword: strings.TrimSpace(options.BrowsePassword),
 		allowUpload:    options.AllowUpload,
 		uploadPassword: strings.TrimSpace(options.UploadPassword),
 	}
@@ -633,6 +646,11 @@ func (b *Browser) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	requestPath, ok := b.stripRequestPath(w, r)
 	if !ok {
+		return
+	}
+
+	if b.browseEnabled() && !b.isBrowseAuthorized(r) {
+		b.renderBrowseLogin(w, r)
 		return
 	}
 
@@ -669,6 +687,26 @@ func (b *Browser) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	action := r.URL.Query().Get("action")
+	if action == "browse_login" {
+		b.handleBrowseLogin(w, r)
+		return
+	}
+	if action == "browse_logout" {
+		b.clearBrowseAuthCookie(w)
+		b.clearAuthCookie(w)
+		redirectToDirectory(w, r)
+		return
+	}
+	if action == "login" {
+		b.handleLogin(w, r)
+		return
+	}
+	if b.browseEnabled() && !b.isBrowseAuthorized(r) {
+		http.Error(w, "browse password required", http.StatusForbidden)
+		return
+	}
+
 	dirPath, _, ok := b.resolve(requestPath)
 	if !ok {
 		http.NotFound(w, r)
@@ -680,7 +718,6 @@ func (b *Browser) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	action := r.URL.Query().Get("action")
 	if action == "" {
 		if err := r.ParseMultipartForm(64 << 20); err != nil && err != http.ErrNotMultipart {
 			http.Error(w, "bad request", http.StatusBadRequest)
@@ -729,6 +766,30 @@ func (b *Browser) handlePost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (b *Browser) handleBrowseLogin(w http.ResponseWriter, r *http.Request) {
+	if !b.browseEnabled() {
+		http.Error(w, "browse password is disabled", http.StatusForbidden)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	password := r.FormValue("password")
+	if b.uploadEnabled() && subtle.ConstantTimeCompare([]byte(password), []byte(b.uploadPassword)) == 1 {
+		b.setBrowseAuthCookie(w)
+		b.setAuthCookie(w)
+		redirectToDirectory(w, r)
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(password), []byte(b.browsePassword)) != 1 {
+		redirectToBrowseLoginError(w, r)
+		return
+	}
+	b.setBrowseAuthCookie(w)
+	redirectToDirectory(w, r)
+}
+
 func (b *Browser) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if !b.uploadEnabled() {
 		http.Error(w, "upload management is disabled", http.StatusForbidden)
@@ -742,6 +803,14 @@ func (b *Browser) handleLogin(w http.ResponseWriter, r *http.Request) {
 		redirectToLoginError(w, r)
 		return
 	}
+	if b.browseEnabled() {
+		b.setBrowseAuthCookie(w)
+	}
+	b.setAuthCookie(w)
+	redirectToDirectory(w, r)
+}
+
+func (b *Browser) setAuthCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     uploadAuthCookie,
 		Value:    b.authToken(),
@@ -749,7 +818,16 @@ func (b *Browser) handleLogin(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
-	redirectToDirectory(w, r)
+}
+
+func (b *Browser) setBrowseAuthCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     browseAuthCookie,
+		Value:    b.browseAuthToken(),
+		Path:     b.cookiePath(),
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 func (b *Browser) handleMkdir(w http.ResponseWriter, r *http.Request, dirPath string) bool {
@@ -872,8 +950,17 @@ func (b *Browser) uploadEnabled() bool {
 	return b.allowUpload && b.uploadPassword != ""
 }
 
+func (b *Browser) browseEnabled() bool {
+	return b.allowBrowse && b.browsePassword != ""
+}
+
 func (b *Browser) authToken() string {
 	sum := sha256.Sum256([]byte(b.uploadPassword + "\x00" + b.root))
+	return fmt.Sprintf("%x", sum)
+}
+
+func (b *Browser) browseAuthToken() string {
+	sum := sha256.Sum256([]byte("browse\x00" + b.browsePassword + "\x00" + b.root))
 	return fmt.Sprintf("%x", sum)
 }
 
@@ -883,6 +970,14 @@ func (b *Browser) isAuthorized(r *http.Request) bool {
 		return false
 	}
 	return subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(b.authToken())) == 1
+}
+
+func (b *Browser) isBrowseAuthorized(r *http.Request) bool {
+	cookie, err := r.Cookie(browseAuthCookie)
+	if err != nil {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(b.browseAuthToken())) == 1
 }
 
 func (b *Browser) cookiePath() string {
@@ -895,6 +990,17 @@ func (b *Browser) cookiePath() string {
 func (b *Browser) clearAuthCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     uploadAuthCookie,
+		Value:    "",
+		Path:     b.cookiePath(),
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func (b *Browser) clearBrowseAuthCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     browseAuthCookie,
 		Value:    "",
 		Path:     b.cookiePath(),
 		MaxAge:   -1,
@@ -943,6 +1049,15 @@ func redirectToLoginError(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL.String(), http.StatusSeeOther)
 }
 
+func redirectToBrowseLoginError(w http.ResponseWriter, r *http.Request) {
+	redirectURL := *r.URL
+	query := redirectURL.Query()
+	query.Del("action")
+	query.Set("browse_login_error", "1")
+	redirectURL.RawQuery = query.Encode()
+	http.Redirect(w, r, redirectURL.String(), http.StatusSeeOther)
+}
+
 func (b *Browser) renderDirectory(w http.ResponseWriter, r *http.Request, dirPath string, cleanPath string) {
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
@@ -967,7 +1082,7 @@ func (b *Browser) renderDirectory(w http.ResponseWriter, r *http.Request, dirPat
 	fmt.Fprint(w, "</head><body><main class=\"page\"><header class=\"header\"><h1>文件浏览</h1><div class=\"path-row\">")
 	renderBreadcrumbs(w, cleanPath)
 	fmt.Fprint(w, "</div>")
-	b.renderLoginButton(w, r, canManage)
+	b.renderHeaderActions(w, r, canManage)
 	fmt.Fprint(w, "</header>")
 	renderNotice(w, r)
 	b.renderUploadPanel(w, canManage)
@@ -1035,6 +1150,20 @@ func (b *Browser) renderDirectory(w http.ResponseWriter, r *http.Request, dirPat
 	fmt.Fprint(w, "</main></body></html>")
 }
 
+func (b *Browser) renderBrowseLogin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if r.Method == http.MethodHead {
+		return
+	}
+	message := ""
+	if r.URL.Query().Get("browse_login_error") == "1" {
+		message = "<p class=\"login-message\">浏览密码不正确，请确认后再试。</p>"
+	}
+	fmt.Fprint(w, "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><link rel=\"icon\" href=\"data:,\"><title>文件浏览登录</title>")
+	fmt.Fprintf(w, "<style>%s</style>", directoryPageStyle)
+	fmt.Fprintf(w, "</head><body><main class=\"page\"><section class=\"panel\"><div class=\"panel-head\"><div><div class=\"panel-title\">文件浏览</div><div class=\"panel-subtitle\">请输入浏览密码</div></div></div>%s<form class=\"inline-form\" method=\"post\" action=\"?action=browse_login\"><input type=\"text\" name=\"username\" value=\"file-browser\" autocomplete=\"username\" hidden><div class=\"field\"><label>浏览密码</label><input type=\"password\" name=\"password\" autocomplete=\"current-password\" autofocus required></div><button class=\"btn\" type=\"submit\">登录</button></form></section></main></body></html>", message)
+}
+
 func renderNotice(w http.ResponseWriter, r *http.Request) {
 	message := noticeMessage(r.URL.Query().Get("notice"))
 	if message == "" {
@@ -1098,17 +1227,30 @@ func pathSegments(cleanPath string) []string {
 	return strings.Split(strings.Trim(cleanPath, "/"), "/")
 }
 
-func (b *Browser) renderLoginButton(w http.ResponseWriter, r *http.Request, canManage bool) {
-	if !b.uploadEnabled() || canManage {
+func (b *Browser) renderHeaderActions(w http.ResponseWriter, r *http.Request, canManage bool) {
+	showManageLogin := b.uploadEnabled() && !canManage
+	showBrowseLogout := b.browseEnabled() && b.isBrowseAuthorized(r)
+	if !showManageLogin && !showBrowseLogout {
 		return
 	}
+	fmt.Fprint(w, "<div class=\"login-corner\">")
+	if showManageLogin {
+		b.renderLoginButton(w, r)
+	}
+	if showBrowseLogout {
+		fmt.Fprint(w, "<form method=\"post\" action=\"?action=browse_logout\"><button class=\"login-trigger\" type=\"submit\">退出浏览</button></form>")
+	}
+	fmt.Fprint(w, "</div>")
+}
+
+func (b *Browser) renderLoginButton(w http.ResponseWriter, r *http.Request) {
 	openAttr := ""
 	message := ""
 	if r.URL.Query().Get("login_error") == "1" {
 		openAttr = " open"
 		message = "<p class=\"login-message\">管理密码不正确，请确认后再试。</p>"
 	}
-	fmt.Fprintf(w, "<div class=\"login-corner\"><details class=\"login-menu\"%s><summary class=\"login-trigger\">登录</summary><div class=\"login-popover\">%s<form class=\"inline-form\" method=\"post\" action=\"?action=login\"><input type=\"text\" name=\"username\" value=\"file-upload\" autocomplete=\"username\" hidden><div class=\"field\"><label>管理密码</label><input type=\"password\" name=\"password\" autocomplete=\"current-password\"></div><button class=\"btn\" type=\"submit\">登录</button></form></div></details></div>", openAttr, message)
+	fmt.Fprintf(w, "<details class=\"login-menu\"%s><summary class=\"login-trigger\">管理登录</summary><div class=\"login-popover\">%s<form class=\"inline-form\" method=\"post\" action=\"?action=login\"><input type=\"text\" name=\"username\" value=\"file-upload\" autocomplete=\"username\" hidden><div class=\"field\"><label>管理密码</label><input type=\"password\" name=\"password\" autocomplete=\"current-password\"></div><button class=\"btn\" type=\"submit\">登录</button></form></div></details>", openAttr, message)
 }
 
 func (b *Browser) renderUploadPanel(w http.ResponseWriter, canManage bool) {

@@ -141,8 +141,12 @@
 		<en-US>Add</en-US>
 	</lang>
 	<lang id="word-allowupload">
-		<zh-CN>允许上传</zh-CN>
-		<en-US>Allow upload</en-US>
+		<zh-CN>启用管理</zh-CN>
+		<en-US>Enable management</en-US>
+	</lang>
+	<lang id="word-allowbrowse">
+		<zh-CN>启用浏览认证</zh-CN>
+		<en-US>Enable browse authentication</en-US>
 	</lang>
 	<lang id="word-cancel">
 		<zh-CN>取消</zh-CN>
@@ -546,6 +550,10 @@
 		<zh-CN>管理密码</zh-CN>
 		<en-US>Management password</en-US>
 	</lang>
+	<lang id="word-browsepassword">
+		<zh-CN>浏览密码</zh-CN>
+		<en-US>Browse password</en-US>
+	</lang>
 	<lang id="word-true">
 		<zh-CN>是</zh-CN>
 		<en-US>True</en-US>
@@ -869,6 +877,10 @@
 		<lang id="managementpasswordcannotbeempty">
 			<zh-CN>管理密码不能为空</zh-CN>
 			<en-US>Management password cannot be empty</en-US>
+		</lang>
+		<lang id="browsepasswordcannotbeempty">
+			<zh-CN>浏览密码不能为空</zh-CN>
+			<en-US>Browse password cannot be empty</en-US>
 		</lang>
 		<lang id="vkeyduplicatepleasereset">
 			<zh-CN>唯一验证密钥重复，请重新设置</zh-CN>

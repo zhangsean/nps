@@ -257,6 +257,10 @@ func dealTunnel(s string) *file.Tunnel {
 			t.LocalPath = item[1]
 		case "strip_pre":
 			t.StripPre = item[1]
+		case "allow_browse":
+			t.AllowBrowse = common.GetBoolByStr(item[1])
+		case "browse_password":
+			t.BrowsePass = item[1]
 		case "allow_upload":
 			t.AllowUpload = common.GetBoolByStr(item[1])
 		case "upload_password":

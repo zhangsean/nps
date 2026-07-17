@@ -72,6 +72,9 @@ func (rp *HttpReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request)
 	req = req.WithContext(context.WithValue(req.Context(), "accessLog", accessLog))
 
 	rp.proxy.ServeHTTP(rw, req, host)
+	if accessLog.entry.Error == "" && accessLog.entry.StatusCode == http.StatusSwitchingProtocols {
+		accessLog.SetPhase(httpAccessLogPhaseComplete)
+	}
 
 	defer host.Client.AddConn()
 }
@@ -103,7 +106,7 @@ func (*flowConn) SetWriteDeadline(t time.Time) error { return nil }
 
 func WebSocketHttpReverseProxy(s *httpServer) *HttpReverseProxy {
 	rp := &HttpReverseProxy{
-		responseHeaderTimeout: 30 * time.Second,
+		responseHeaderTimeout: s.upstreamResponseTimeout,
 	}
 	local, _ := net.ResolveTCPAddr("tcp", "127.0.0.1")
 	proxy := WebSocketReverseProxy(&httputil.ReverseProxy{
@@ -133,10 +136,15 @@ func WebSocketHttpReverseProxy(s *httpServer) *HttpReverseProxy {
 				lk = conn.NewLink("http", targetAddr, host.Client.Cnf.Crypt, host.Client.Cnf.Compress, r.RemoteAddr, host.Target.LocalProxy)
 				lk.SetTargetHosts(targetHosts)
 				lk.SetTargetConnectRetryHook(accessLog.TargetConnectRetryHook("local_proxy"))
+				targetConnectStart := time.Now()
 				if target, err = s.bridge.SendLinkInfo(host.Client.Id, lk, nil); err != nil {
+					accessLog.SetPhase(httpAccessLogPhaseTargetConnect)
+					accessLog.AddPhaseDuration(httpAccessLogPhaseTargetConnect, time.Since(targetConnectStart))
+					accessLog.SetStatusCode(http.StatusBadGateway)
 					logs.Notice("connect to target %s error %s", lk.Host, err)
 					return nil, NewHTTPError(http.StatusBadGateway, "Cannot connect to the server")
 				}
+				accessLog.AddPhaseDuration(httpAccessLogPhaseTargetConnect, time.Since(targetConnectStart))
 				connClient = conn.GetConn(target, lk.Crypt, lk.Compress, host.Client.Rate, true)
 				return &flowConn{
 					ReadWriteCloser: connClient,
@@ -151,6 +159,13 @@ func WebSocketHttpReverseProxy(s *httpServer) *HttpReverseProxy {
 			var httpErr *HTTPError
 			if errors.As(err, &httpErr) {
 				statusCode = httpErr.HTTPCode
+			}
+			if accessLog, ok := req.Context().Value("accessLog").(*httpAccessLogRecord); ok {
+				if accessLog.entry.Phase == "" {
+					accessLog.SetPhase(httpAccessLogPhaseResponseHeader)
+				}
+				accessLog.SetStatusCode(statusCode)
+				accessLog.Finish(err.Error())
 			}
 			rw.WriteHeader(statusCode)
 		},
@@ -173,10 +188,15 @@ func WebSocketHttpReverseProxy(s *httpServer) *HttpReverseProxy {
 		lk = conn.NewLink("tcp", targetAddr, host.Client.Cnf.Crypt, host.Client.Cnf.Compress, r.RemoteAddr, host.Target.LocalProxy)
 		lk.SetTargetHosts(targetHosts)
 		lk.SetTargetConnectRetryHook(accessLog.TargetConnectRetryHook("local_proxy"))
+		targetConnectStart := time.Now()
 		if target, err = s.bridge.SendLinkInfo(host.Client.Id, lk, nil); err != nil {
+			accessLog.SetPhase(httpAccessLogPhaseTargetConnect)
+			accessLog.AddPhaseDuration(httpAccessLogPhaseTargetConnect, time.Since(targetConnectStart))
+			accessLog.SetStatusCode(http.StatusBadGateway)
 			logs.Notice("connect to target %s error %s", lk.Host, err)
 			return nil, NewHTTPError(http.StatusBadGateway, "Cannot connect to the target")
 		}
+		accessLog.AddPhaseDuration(httpAccessLogPhaseTargetConnect, time.Since(targetConnectStart))
 		connClient = conn.GetConn(target, lk.Crypt, lk.Compress, host.Client.Rate, true)
 		return &flowConn{
 			ReadWriteCloser: connClient,
@@ -249,7 +269,14 @@ func (p *ReverseProxy) serveWebSocket(rw http.ResponseWriter, req *http.Request,
 	}
 	targetConn, err := p.WebSocketDialContext(req.Context(), "tcp", "")
 	if err != nil {
-		rw.WriteHeader(501)
+		statusCode := http.StatusNotImplemented
+		if accessLog, ok := req.Context().Value("accessLog").(*httpAccessLogRecord); ok {
+			if accessLog.entry.StatusCode != 0 {
+				statusCode = accessLog.entry.StatusCode
+			}
+			accessLog.Finish(err.Error())
+		}
+		rw.WriteHeader(statusCode)
 		return
 	}
 	defer targetConn.Close()

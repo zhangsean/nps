@@ -24,28 +24,43 @@ import (
 )
 
 type httpAccessLogEntry struct {
-	Timestamp      string `json:"timestamp"`
-	Event          string `json:"event,omitempty"`
-	Method         string `json:"method"`
-	Scheme         string `json:"scheme,omitempty"`
-	Host           string `json:"host,omitempty"`
-	URL            string `json:"url"`
-	RemoteAddr     string `json:"remote_addr,omitempty"`
-	HostID         int    `json:"host_id,omitempty"`
-	ClientID       int    `json:"client_id,omitempty"`
-	Target         string `json:"target,omitempty"`
-	StatusCode     int    `json:"status_code,omitempty"`
-	RequestBytes   int64  `json:"request_bytes,omitempty"`
-	ResponseBytes  int64  `json:"response_bytes,omitempty"`
-	DurationMS     int64  `json:"duration_ms"`
-	TLSPassthrough bool   `json:"tls_passthrough,omitempty"`
-	Error          string `json:"error,omitempty"`
-	ErrorType      string `json:"error_type,omitempty"`
-	RetrySource    string `json:"retry_source,omitempty"`
-	RetryAttempt   int    `json:"retry_attempt,omitempty"`
-	RetryAttempts  int    `json:"retry_attempts,omitempty"`
-	RetryDelayMS   int64  `json:"retry_delay_ms,omitempty"`
+	Timestamp        string `json:"timestamp"`
+	Event            string `json:"event,omitempty"`
+	Method           string `json:"method"`
+	Scheme           string `json:"scheme,omitempty"`
+	Host             string `json:"host,omitempty"`
+	URL              string `json:"url"`
+	RemoteAddr       string `json:"remote_addr,omitempty"`
+	HostID           int    `json:"host_id,omitempty"`
+	ClientID         int    `json:"client_id,omitempty"`
+	Target           string `json:"target,omitempty"`
+	StatusCode       int    `json:"status_code,omitempty"`
+	RequestBytes     int64  `json:"request_bytes,omitempty"`
+	ResponseBytes    int64  `json:"response_bytes,omitempty"`
+	DurationMS       int64  `json:"duration_ms"`
+	Phase            string `json:"phase,omitempty"`
+	SlowestPhase     string `json:"slowest_phase,omitempty"`
+	SlowestPhaseMS   int64  `json:"slowest_phase_ms,omitempty"`
+	TargetConnectMS  int64  `json:"target_connect_ms,omitempty"`
+	RequestWriteMS   int64  `json:"request_write_ms,omitempty"`
+	ResponseHeaderMS int64  `json:"response_header_ms,omitempty"`
+	ResponseWriteMS  int64  `json:"response_write_ms,omitempty"`
+	TLSPassthrough   bool   `json:"tls_passthrough,omitempty"`
+	Error            string `json:"error,omitempty"`
+	ErrorType        string `json:"error_type,omitempty"`
+	RetrySource      string `json:"retry_source,omitempty"`
+	RetryAttempt     int    `json:"retry_attempt,omitempty"`
+	RetryAttempts    int    `json:"retry_attempts,omitempty"`
+	RetryDelayMS     int64  `json:"retry_delay_ms,omitempty"`
 }
+
+const (
+	httpAccessLogPhaseTargetConnect  = "target_connect"
+	httpAccessLogPhaseRequestWrite   = "request_write"
+	httpAccessLogPhaseResponseHeader = "response_header"
+	httpAccessLogPhaseResponseWrite  = "response_write"
+	httpAccessLogPhaseComplete       = "complete"
+)
 
 type httpAccessLogRecord struct {
 	entry httpAccessLogEntry
@@ -154,6 +169,29 @@ func (record *httpAccessLogRecord) SetResponseBytes(responseBytes int64) {
 	}
 }
 
+func (record *httpAccessLogRecord) SetPhase(phase string) {
+	if record != nil {
+		record.entry.Phase = phase
+	}
+}
+
+func (record *httpAccessLogRecord) AddPhaseDuration(phase string, d time.Duration) {
+	if record == nil || d < 0 {
+		return
+	}
+	ms := d.Milliseconds()
+	switch phase {
+	case httpAccessLogPhaseTargetConnect:
+		record.entry.TargetConnectMS += ms
+	case httpAccessLogPhaseRequestWrite:
+		record.entry.RequestWriteMS += ms
+	case httpAccessLogPhaseResponseHeader:
+		record.entry.ResponseHeaderMS += ms
+	case httpAccessLogPhaseResponseWrite:
+		record.entry.ResponseWriteMS += ms
+	}
+}
+
 func (record *httpAccessLogRecord) TargetConnectRetryHook(source string) npsconn.TargetConnectRetryHook {
 	return func(info npsconn.RetryInfo) {
 		if info.Source == "" {
@@ -169,6 +207,7 @@ func (record *httpAccessLogRecord) WriteTargetConnectRetry(info npsconn.RetryInf
 	}
 	entry := record.entry
 	entry.Event = "target_connect_retry"
+	entry.Phase = httpAccessLogPhaseTargetConnect
 	entry.DurationMS = time.Since(record.start).Milliseconds()
 	if info.Target != "" {
 		entry.Target = info.Target
@@ -199,6 +238,7 @@ func (record *httpAccessLogRecord) Finish(errText string) {
 		record.entry.DurationMS = time.Since(record.start).Milliseconds()
 		record.entry.Error = errText
 		record.entry.ErrorType = classifyHTTPAccessLogRecordError(record)
+		record.entry.SlowestPhase, record.entry.SlowestPhaseMS = slowestHTTPAccessLogPhase(record.entry)
 		if shouldSkipHTTPAccessLog(record) {
 			return
 		}
@@ -214,6 +254,10 @@ func (record *httpAccessLogRecord) Finish(errText string) {
 func buildHTTPAccessLogLine(entry httpAccessLogEntry) ([]byte, error) {
 	if entry.URL == "" {
 		entry.URL = "/"
+	}
+	includePhaseDetails := shouldIncludeHTTPAccessLogPhaseDetails(entry)
+	if includePhaseDetails && entry.SlowestPhase == "" {
+		entry.SlowestPhase, entry.SlowestPhaseMS = slowestHTTPAccessLogPhase(entry)
 	}
 	fields := httpAccessLog.fields
 	var buf bytes.Buffer
@@ -264,6 +308,15 @@ func buildHTTPAccessLogLine(entry httpAccessLogEntry) ([]byte, error) {
 	add("target", entry.Target, false)
 	add("status_code", entry.StatusCode, false)
 	add("duration_ms", entry.DurationMS, true)
+	if includePhaseDetails {
+		add("phase", entry.Phase, false)
+		add("slowest_phase", entry.SlowestPhase, false)
+		add("slowest_phase_ms", entry.SlowestPhaseMS, false)
+		add("target_connect_ms", entry.TargetConnectMS, false)
+		add("request_write_ms", entry.RequestWriteMS, false)
+		add("response_header_ms", entry.ResponseHeaderMS, false)
+		add("response_write_ms", entry.ResponseWriteMS, false)
+	}
 	add("request_bytes", entry.RequestBytes, false)
 	add("response_bytes", entry.ResponseBytes, false)
 	add("tls_passthrough", entry.TLSPassthrough, false)
@@ -275,6 +328,36 @@ func buildHTTPAccessLogLine(entry httpAccessLogEntry) ([]byte, error) {
 	add("retry_delay_ms", entry.RetryDelayMS, false)
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
+}
+
+func shouldIncludeHTTPAccessLogPhaseDetails(entry httpAccessLogEntry) bool {
+	if entry.Event != "" || entry.Error != "" || entry.ErrorType != "" {
+		return true
+	}
+	if entry.StatusCode >= http.StatusBadRequest {
+		return true
+	}
+	return entry.Phase != "" && entry.Phase != httpAccessLogPhaseComplete
+}
+
+func slowestHTTPAccessLogPhase(entry httpAccessLogEntry) (string, int64) {
+	type phaseDuration struct {
+		phase string
+		ms    int64
+	}
+	phases := []phaseDuration{
+		{phase: httpAccessLogPhaseTargetConnect, ms: entry.TargetConnectMS},
+		{phase: httpAccessLogPhaseRequestWrite, ms: entry.RequestWriteMS},
+		{phase: httpAccessLogPhaseResponseHeader, ms: entry.ResponseHeaderMS},
+		{phase: httpAccessLogPhaseResponseWrite, ms: entry.ResponseWriteMS},
+	}
+	var slowest phaseDuration
+	for _, current := range phases {
+		if current.ms > slowest.ms {
+			slowest = current
+		}
+	}
+	return slowest.phase, slowest.ms
 }
 
 func writeHTTPAccessLogField(buf *bytes.Buffer, first *bool, name string, value interface{}) {

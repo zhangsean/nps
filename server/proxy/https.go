@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"time"
 
 	"ehang.io/nps/lib/cache"
 	"ehang.io/nps/lib/common"
@@ -22,10 +23,12 @@ type HttpsServer struct {
 	hostIdCertMap    sync.Map
 }
 
-func NewHttpsServer(l net.Listener, bridge NetBridge, useCache bool, cacheLen int) *HttpsServer {
+func NewHttpsServer(l net.Listener, bridge NetBridge, useCache bool, cacheLen int, upstreamResponseTimeout time.Duration) *HttpsServer {
 	https := &HttpsServer{listener: l}
 	https.bridge = bridge
 	https.useCache = useCache
+	https.cacheLen = cacheLen
+	https.upstreamResponseTimeout = upstreamResponseTimeout
 	if useCache {
 		https.cache = cache.New(cacheLen)
 	}

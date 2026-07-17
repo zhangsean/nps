@@ -211,6 +211,8 @@ mode=file
 server_port=9100
 local_path=/files
 strip_pre=/web/
+allow_browse=false
+browse_password=
 allow_upload=false
 upload_password=
 ````
@@ -221,10 +223,14 @@ mode | file
 server_port | 服务端开启的端口
 local_path|本地文件目录，留空时默认为 `/files`
 strip_pre|前缀
-allow_upload|是否允许上传管理，默认 `false`
+allow_browse|是否启用浏览认证，默认 `false`
+browse_password|浏览密码，`allow_browse=true` 时必须配置
+allow_upload|是否启用管理，默认 `false`
 upload_password|管理密码，`allow_upload=true` 时必须配置
 
 对于`strip_pre`，访问公网`ip:9100/web/`相当于访问`/files`目录
+
+开启 `allow_browse=true` 并配置 `browse_password` 后，访问目录列表和直接下载文件都必须先输入浏览密码。若同时启用管理，输入管理密码可直接获得浏览和管理权限。
 
 开启 `allow_upload=true` 并配置 `upload_password` 后，目录页面会显示管理登录入口。输入管理密码后，可在当前目录创建文件夹、上传文件、删除文件或文件夹。
 

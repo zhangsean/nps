@@ -29,9 +29,9 @@ import (
 
 var ServerTlsEnable bool = false
 
-const defaultClientConnectTimeout = 5 * time.Second
-const defaultTargetConnectTimeout = 5 * time.Second
-const defaultTargetConnectRetryCount = 1
+const defaultClientConnectTimeout = 2 * time.Second
+const defaultTargetConnectTimeout = 2 * time.Second
+const defaultTargetConnectRetryCount = 2
 
 var targetConnectRetrySleep = time.Sleep
 

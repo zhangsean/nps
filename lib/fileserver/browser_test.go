@@ -223,6 +223,126 @@ func TestUploadManagementFlow(t *testing.T) {
 	}
 }
 
+func TestBrowsePasswordProtectsDirectoryAndFiles(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "hello.txt"), []byte("hello"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewBrowserWithOptions(root, "", BrowserOptions{
+		AllowBrowse:    true,
+		BrowsePassword: "view",
+	})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("directory status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "请输入浏览密码") || strings.Contains(body, "管理密码") || strings.Contains(body, "hello.txt") {
+		t.Fatalf("unauthorized directory should show browse login only: %s", body)
+	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://example.com/hello.txt", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("file status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body = rec.Body.String()
+	if !strings.Contains(body, "请输入浏览密码") || strings.Contains(body, "hello") {
+		t.Fatalf("unauthorized direct file request should not return file content: %s", body)
+	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, formRequest("http://example.com/?action=browse_login", url.Values{"password": {"wrong"}}, nil))
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("invalid browse login status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); !strings.Contains(location, "browse_login_error=1") {
+		t.Fatalf("invalid browse login location = %q, want browse_login_error=1", location)
+	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://example.com/?browse_login_error=1", nil))
+	if !strings.Contains(rec.Body.String(), "浏览密码不正确") {
+		t.Fatalf("browse login error prompt missing: %s", rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, formRequest("http://example.com/?action=browse_login", url.Values{"password": {"view"}}, nil))
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("browse login status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	cookie := namedCookie(rec.Result().Cookies(), browseAuthCookie)
+	if cookie == nil {
+		t.Fatalf("browse auth cookie missing: %#v", rec.Result().Cookies())
+	}
+
+	rec = httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req.AddCookie(cookie)
+	handler.ServeHTTP(rec, req)
+	if body := rec.Body.String(); !strings.Contains(body, "hello.txt") || !strings.Contains(body, "退出浏览") {
+		t.Fatalf("authorized directory listing missing file: %s", body)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "http://example.com/hello.txt", nil)
+	req.AddCookie(cookie)
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != "hello" {
+		t.Fatalf("authorized file response status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	req = formRequest("http://example.com/?action=browse_logout", nil, cookie)
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("browse logout status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	cleared := namedCookie(rec.Result().Cookies(), browseAuthCookie)
+	if cleared == nil || cleared.MaxAge != -1 {
+		t.Fatalf("browse logout should clear browse cookie: %#v", rec.Result().Cookies())
+	}
+}
+
+func TestManagementPasswordGrantsBrowseAndManage(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "hello.txt"), []byte("hello"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewBrowserWithOptions(root, "", BrowserOptions{
+		AllowBrowse:    true,
+		BrowsePassword: "view",
+		AllowUpload:    true,
+		UploadPassword: "admin",
+	})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, formRequest("http://example.com/?action=browse_login", url.Values{"password": {"admin"}}, nil))
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("management browse login status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	cookies := rec.Result().Cookies()
+	browseCookie := namedCookie(cookies, browseAuthCookie)
+	manageCookie := namedCookie(cookies, uploadAuthCookie)
+	if browseCookie == nil || manageCookie == nil {
+		t.Fatalf("management browse login should set browse and management cookies: %#v", cookies)
+	}
+
+	rec = httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req.AddCookie(browseCookie)
+	req.AddCookie(manageCookie)
+	handler.ServeHTTP(rec, req)
+	body := rec.Body.String()
+	for _, want := range []string{"hello.txt", "上传维护", "退出浏览"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("management login response missing %q: %s", want, body)
+		}
+	}
+}
+
 func formRequest(target string, values url.Values, cookie *http.Cookie) *http.Request {
 	req := httptest.NewRequest(http.MethodPost, target, strings.NewReader(values.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -230,6 +350,15 @@ func formRequest(target string, values url.Values, cookie *http.Cookie) *http.Re
 		req.AddCookie(cookie)
 	}
 	return req
+}
+
+func namedCookie(cookies []*http.Cookie, name string) *http.Cookie {
+	for _, cookie := range cookies {
+		if cookie.Name == name {
+			return cookie
+		}
+	}
+	return nil
 }
 
 func uploadRequest(target string, name string, content string, cookie *http.Cookie) *http.Request {

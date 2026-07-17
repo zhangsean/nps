@@ -33,6 +33,9 @@ func getTunnelClientId(t *file.Tunnel, requestedClientId int) int {
 }
 
 func validateTunnelUpload(t *file.Tunnel) string {
+	if t.Mode == "file" && t.AllowBrowse && strings.TrimSpace(t.BrowsePass) == "" {
+		return "browse password cannot be empty"
+	}
 	if t.Mode == "file" && t.AllowUpload && strings.TrimSpace(t.UploadPass) == "" {
 		return "management password cannot be empty"
 	}
@@ -159,6 +162,8 @@ func (s *IndexController) Add() {
 			Password:    s.getEscapeString("password"),
 			LocalPath:   s.getEscapeString("local_path"),
 			StripPre:    s.getEscapeString("strip_pre"),
+			AllowBrowse: s.GetBoolNoErr("allow_browse"),
+			BrowsePass:  s.getEscapeString("browse_password"),
 			AllowUpload: s.GetBoolNoErr("allow_upload"),
 			UploadPass:  s.getEscapeString("upload_password"),
 			Flow:        &file.Flow{},
@@ -247,6 +252,8 @@ func (s *IndexController) Edit() {
 			t.Id = id
 			t.LocalPath = s.getEscapeString("local_path")
 			t.StripPre = s.getEscapeString("strip_pre")
+			t.AllowBrowse = s.GetBoolNoErr("allow_browse")
+			t.BrowsePass = s.getEscapeString("browse_password")
 			t.AllowUpload = s.GetBoolNoErr("allow_upload")
 			t.UploadPass = s.getEscapeString("upload_password")
 			t.Remark = s.getEscapeString("remark")

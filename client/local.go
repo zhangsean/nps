@@ -76,6 +76,8 @@ func startLocalFileServer(config *config.CommonConfig, t *file.Tunnel, vkey stri
 	}
 	srv := &http.Server{
 		Handler: fileserver.NewBrowserWithOptions(t.LocalPath, t.StripPre, fileserver.BrowserOptions{
+			AllowBrowse:    t.AllowBrowse,
+			BrowsePassword: t.BrowsePass,
 			AllowUpload:    t.AllowUpload,
 			UploadPassword: t.UploadPass,
 		}),

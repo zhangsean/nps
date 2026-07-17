@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"ehang.io/nps/bridge"
 	"ehang.io/nps/lib/cache"
@@ -23,15 +24,16 @@ import (
 
 type httpServer struct {
 	BaseServer
-	httpPort      int
-	httpsPort     int
-	httpServer    *http.Server
-	httpsServer   *http.Server
-	httpsListener net.Listener
-	useCache      bool
-	addOrigin     bool
-	cache         *cache.Cache
-	cacheLen      int
+	httpPort                int
+	httpsPort               int
+	httpServer              *http.Server
+	httpsServer             *http.Server
+	httpsListener           net.Listener
+	useCache                bool
+	addOrigin               bool
+	cache                   *cache.Cache
+	cacheLen                int
+	upstreamResponseTimeout time.Duration
 }
 
 type pendingHTTPResponseLog struct {
@@ -39,18 +41,19 @@ type pendingHTTPResponseLog struct {
 	accessLog *httpAccessLogRecord
 }
 
-func NewHttp(bridge *bridge.Bridge, c *file.Tunnel, httpPort, httpsPort int, useCache bool, cacheLen int, addOrigin bool) *httpServer {
+func NewHttp(bridge *bridge.Bridge, c *file.Tunnel, httpPort, httpsPort int, useCache bool, cacheLen int, addOrigin bool, upstreamResponseTimeout time.Duration) *httpServer {
 	httpServer := &httpServer{
 		BaseServer: BaseServer{
 			task:   c,
 			bridge: bridge,
 			Mutex:  sync.Mutex{},
 		},
-		httpPort:  httpPort,
-		httpsPort: httpsPort,
-		useCache:  useCache,
-		cacheLen:  cacheLen,
-		addOrigin: addOrigin,
+		httpPort:                httpPort,
+		httpsPort:               httpsPort,
+		useCache:                useCache,
+		cacheLen:                cacheLen,
+		addOrigin:               addOrigin,
+		upstreamResponseTimeout: upstreamResponseTimeout,
 	}
 	if useCache {
 		httpServer.cache = cache.New(cacheLen)
@@ -86,7 +89,7 @@ func (s *httpServer) Start() error {
 				logs.Error(err)
 				os.Exit(0)
 			}
-			logs.Error(NewHttpsServer(s.httpsListener, s.bridge, s.useCache, s.cacheLen).Start())
+			logs.Error(NewHttpsServer(s.httpsListener, s.bridge, s.useCache, s.cacheLen, s.upstreamResponseTimeout).Start())
 		}()
 	}
 	return nil
@@ -152,20 +155,21 @@ func (s *httpServer) handleTunneling(w http.ResponseWriter, r *http.Request) {
 
 func (s *httpServer) handleHttp(c *conn.Conn, r *http.Request) {
 	var (
-		host       *file.Host
-		target     net.Conn
-		err        error
-		connClient io.ReadWriteCloser
-		scheme     = r.URL.Scheme
-		lk         *conn.Link
-		targetAddr string
-		lenConn    *conn.LenConn
-		isReset    bool
-		wg         sync.WaitGroup
-		remoteAddr string
-		accessLogs []*httpAccessLogRecord
-		accessLog  *httpAccessLogRecord
-		failStatus = http.StatusNotFound
+		host              *file.Host
+		target            net.Conn
+		err               error
+		connClient        io.ReadWriteCloser
+		scheme            = r.URL.Scheme
+		lk                *conn.Link
+		targetAddr        string
+		lenConn           *conn.LenConn
+		isReset           bool
+		wg                sync.WaitGroup
+		remoteAddr        string
+		accessLogs        []*httpAccessLogRecord
+		accessLog         *httpAccessLogRecord
+		failStatus        = http.StatusNotFound
+		requestWriteStart time.Time
 	)
 	defer func() {
 		if connClient != nil {
@@ -255,14 +259,18 @@ reset:
 	lk = conn.NewLink("http", targetAddr, host.Client.Cnf.Crypt, host.Client.Cnf.Compress, r.RemoteAddr, host.Target.LocalProxy)
 	lk.SetTargetHosts(targetHosts)
 	lk.SetTargetConnectRetryHook(accessLog.TargetConnectRetryHook("local_proxy"))
+	targetConnectStart := time.Now()
 	if target, err = s.bridge.SendLinkInfo(host.Client.Id, lk, nil); err != nil {
 		failStatus = http.StatusBadGateway
+		accessLog.SetPhase(httpAccessLogPhaseTargetConnect)
+		accessLog.AddPhaseDuration(httpAccessLogPhaseTargetConnect, time.Since(targetConnectStart))
 		accessLog.SetStatusCode(failStatus)
 		accessLog.SetResponseBytes(s.httpErrorResponseBytes(failStatus))
 		accessLog.Finish(err.Error())
 		logs.Notice("connect to target %s error %s", lk.Host, err)
 		return
 	}
+	accessLog.AddPhaseDuration(httpAccessLogPhaseTargetConnect, time.Since(targetConnectStart))
 	connClient = conn.GetConn(target, lk.Crypt, lk.Compress, host.Client.Rate, true)
 	pendingResponses := make(chan pendingHTTPResponseLog, 16)
 
@@ -280,10 +288,21 @@ reset:
 
 		responseReader := bufio.NewReader(connClient)
 		for pendingResponse := range pendingResponses {
+			responseHeaderStart := time.Now()
+			if s.upstreamResponseTimeout > 0 {
+				_ = target.SetReadDeadline(time.Now().Add(s.upstreamResponseTimeout))
+			}
 			resp, err := http.ReadResponse(responseReader, pendingResponse.request)
+			if s.upstreamResponseTimeout > 0 {
+				_ = target.SetReadDeadline(time.Time{})
+			}
+			if pendingResponse.accessLog != nil {
+				pendingResponse.accessLog.AddPhaseDuration(httpAccessLogPhaseResponseHeader, time.Since(responseHeaderStart))
+			}
 			if err != nil || resp == nil {
 				if pendingResponse.accessLog != nil && err != nil {
 					statusCode := upstreamHTTPErrorStatusCode(err)
+					pendingResponse.accessLog.SetPhase(httpAccessLogPhaseResponseHeader)
 					pendingResponse.accessLog.SetStatusCode(statusCode)
 					pendingResponse.accessLog.SetResponseBytes(s.httpErrorResponseBytes(statusCode))
 					pendingResponse.accessLog.Finish(err.Error())
@@ -293,7 +312,10 @@ reset:
 			}
 			pendingResponse.accessLog.SetStatusCode(resp.StatusCode)
 			lenConn := conn.NewLenConn(c)
+			responseWriteStart := time.Now()
 			if err := resp.Write(lenConn); err != nil {
+				pendingResponse.accessLog.SetPhase(httpAccessLogPhaseResponseWrite)
+				pendingResponse.accessLog.AddPhaseDuration(httpAccessLogPhaseResponseWrite, time.Since(responseWriteStart))
 				pendingResponse.accessLog.SetResponseBytes(int64(lenConn.Len))
 				pendingResponse.accessLog.Finish(err.Error())
 				logs.Error(err)
@@ -302,6 +324,8 @@ reset:
 			if resp.Body != nil {
 				_ = resp.Body.Close()
 			}
+			pendingResponse.accessLog.SetPhase(httpAccessLogPhaseComplete)
+			pendingResponse.accessLog.AddPhaseDuration(httpAccessLogPhaseResponseWrite, time.Since(responseWriteStart))
 			pendingResponse.accessLog.SetResponseBytes(int64(lenConn.Len))
 			pendingResponse.accessLog.Finish("")
 		}
@@ -344,8 +368,11 @@ reset:
 		//write
 		lenConn = conn.NewLenConn(connClient)
 		//lenConn = conn.LenConn
+		requestWriteStart = time.Now()
 		if err := r.Write(lenConn); err != nil {
 			statusCode := http.StatusBadGateway
+			currentAccessLog.SetPhase(httpAccessLogPhaseRequestWrite)
+			currentAccessLog.AddPhaseDuration(httpAccessLogPhaseRequestWrite, time.Since(requestWriteStart))
 			currentAccessLog.SetStatusCode(statusCode)
 			currentAccessLog.SetRequestBytes(int64(lenConn.Len))
 			currentAccessLog.SetResponseBytes(s.httpErrorResponseBytes(statusCode))
@@ -354,6 +381,7 @@ reset:
 			logs.Error("Request write error:", err)
 			break
 		}
+		currentAccessLog.AddPhaseDuration(httpAccessLogPhaseRequestWrite, time.Since(requestWriteStart))
 		currentAccessLog.SetRequestBytes(int64(lenConn.Len))
 		pendingResponses <- pendingHTTPResponseLog{request: r, accessLog: currentAccessLog}
 		host.Client.Flow.Add(int64(lenConn.Len), int64(lenConn.Len))

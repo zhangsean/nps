@@ -158,7 +158,12 @@ func NewMode(Bridge *bridge.Bridge, c *file.Tunnel) proxy.Service {
 		useCache, _ := beego.AppConfig.Bool("http_cache")
 		cacheLen, _ := beego.AppConfig.Int("http_cache_length")
 		addOrigin, _ := beego.AppConfig.Bool("http_add_origin_header")
-		service = proxy.NewHttp(Bridge, c, httpPort, httpsPort, useCache, cacheLen, addOrigin)
+		upstreamResponseTimeoutSeconds := beego.AppConfig.DefaultInt("upstream_response_timeout_seconds", 0)
+		upstreamResponseTimeout := time.Duration(upstreamResponseTimeoutSeconds) * time.Second
+		if upstreamResponseTimeout < 0 {
+			upstreamResponseTimeout = 0
+		}
+		service = proxy.NewHttp(Bridge, c, httpPort, httpsPort, useCache, cacheLen, addOrigin, upstreamResponseTimeout)
 	}
 	return service
 }

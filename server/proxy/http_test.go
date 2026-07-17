@@ -243,6 +243,70 @@ func TestBuildHTTPAccessLogLineWithStatusCode(t *testing.T) {
 	}
 }
 
+func TestBuildHTTPAccessLogLineWithPhaseDurations(t *testing.T) {
+	entry := httpAccessLogEntry{
+		Timestamp:        "2026-07-17 10:11:12.013",
+		Method:           http.MethodGet,
+		URL:              "/api/list",
+		StatusCode:       http.StatusGatewayTimeout,
+		DurationMS:       63,
+		Phase:            httpAccessLogPhaseResponseHeader,
+		TargetConnectMS:  5,
+		RequestWriteMS:   7,
+		ResponseHeaderMS: 43,
+		ResponseWriteMS:  8,
+	}
+
+	line, err := buildHTTPAccessLogLine(entry)
+	if err != nil {
+		t.Fatalf("build log line error: %v", err)
+	}
+
+	var got httpAccessLogEntry
+	if err := json.Unmarshal(line, &got); err != nil {
+		t.Fatalf("log line is not json: %v", err)
+	}
+	if got.Phase != httpAccessLogPhaseResponseHeader {
+		t.Fatalf("unexpected phase %q", got.Phase)
+	}
+	if got.SlowestPhase != httpAccessLogPhaseResponseHeader || got.SlowestPhaseMS != 43 {
+		t.Fatalf("unexpected slowest phase %q/%d", got.SlowestPhase, got.SlowestPhaseMS)
+	}
+	if got.TargetConnectMS != 5 || got.RequestWriteMS != 7 || got.ResponseHeaderMS != 43 || got.ResponseWriteMS != 8 {
+		t.Fatalf("unexpected phase durations: %+v", got)
+	}
+}
+
+func TestBuildHTTPAccessLogLineOmitsPhaseDurationsForNormalRequests(t *testing.T) {
+	entry := httpAccessLogEntry{
+		Timestamp:        "2026-07-17 10:11:12.013",
+		Method:           http.MethodGet,
+		URL:              "/api/list",
+		StatusCode:       http.StatusOK,
+		DurationMS:       63,
+		Phase:            httpAccessLogPhaseComplete,
+		TargetConnectMS:  5,
+		RequestWriteMS:   7,
+		ResponseHeaderMS: 43,
+		ResponseWriteMS:  8,
+	}
+
+	line, err := buildHTTPAccessLogLine(entry)
+	if err != nil {
+		t.Fatalf("build log line error: %v", err)
+	}
+
+	var got map[string]interface{}
+	if err := json.Unmarshal(line, &got); err != nil {
+		t.Fatalf("log line is not json: %v", err)
+	}
+	for _, field := range []string{"phase", "slowest_phase", "slowest_phase_ms", "target_connect_ms", "request_write_ms", "response_header_ms", "response_write_ms"} {
+		if _, ok := got[field]; ok {
+			t.Fatalf("normal request should not include %s: %s", field, string(line))
+		}
+	}
+}
+
 func TestBuildHTTPAccessLogLineWithRetryEvent(t *testing.T) {
 	entry := httpAccessLogEntry{
 		Timestamp:     "2026-07-15 10:00:00.000",
@@ -270,6 +334,13 @@ func TestBuildHTTPAccessLogLineWithRetryEvent(t *testing.T) {
 	}
 	if got.Event != "target_connect_retry" || got.RetrySource != "local_proxy" || got.RetryAttempt != 1 || got.RetryAttempts != 2 || got.RetryDelayMS != 237 {
 		t.Fatalf("unexpected retry fields: %+v", got)
+	}
+}
+
+func TestNewHttpUpstreamResponseTimeout(t *testing.T) {
+	server := NewHttp(nil, nil, 80, 443, false, 0, false, 2*time.Second)
+	if server.upstreamResponseTimeout != 2*time.Second {
+		t.Fatalf("unexpected upstream response timeout %s", server.upstreamResponseTimeout)
 	}
 }
 
