@@ -112,6 +112,7 @@
                     + '<b langtag="word-httpskey"></b>: ' + row.KeyFilePath + '&emsp;<br/><br>'
                     + '<b langtag="word-requestheader"></b>: ' + row.HeaderChange + '&emsp;<br/><br>'
                     + '<b langtag="word-requesthost"></b>: ' + row.HostChange + '&emsp;'
+                    + '<b>允许重试 POST 等请求</b>: ' + (row.ResponseHeaderRetryNonIdempotent ? '是' : '否') + '&emsp;'
         },
         //表格的列
         columns: [

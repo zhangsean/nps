@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,8 +16,26 @@ import (
 	"time"
 
 	"ehang.io/nps/lib/common"
+	"ehang.io/nps/lib/conn"
 	"ehang.io/nps/lib/file"
 )
+
+type retryConfigBridge struct {
+	retryCount    int
+	retryInterval time.Duration
+}
+
+func (b retryConfigBridge) SendLinkInfo(clientId int, link *conn.Link, t *file.Tunnel) (net.Conn, error) {
+	return nil, errors.New("unused")
+}
+
+func (b retryConfigBridge) TargetConnectRetryCount() int {
+	return b.retryCount
+}
+
+func (b retryConfigBridge) TargetConnectRetryInterval() time.Duration {
+	return b.retryInterval
+}
 
 func TestHandleTunnelingHealthCheck(t *testing.T) {
 	server := &httpServer{
@@ -337,6 +356,36 @@ func TestBuildHTTPAccessLogLineWithRetryEvent(t *testing.T) {
 	}
 }
 
+func TestBuildHTTPAccessLogLineWithUpstreamRetryEvent(t *testing.T) {
+	entry := httpAccessLogEntry{
+		Timestamp:     "2026-07-20 17:10:00.000",
+		Event:         "upstream_retry",
+		Method:        http.MethodGet,
+		URL:           "/api",
+		Target:        "192.168.192.99:8000",
+		DurationMS:    3,
+		Phase:         httpAccessLogPhaseResponseHeader,
+		Error:         "upstream disconnected during response_header: unexpected EOF",
+		ErrorType:     "upstream_disconnected",
+		RetrySource:   "local_proxy",
+		RetryAttempt:  1,
+		RetryAttempts: 3,
+	}
+
+	line, err := buildHTTPAccessLogLine(entry)
+	if err != nil {
+		t.Fatalf("build log line error: %v", err)
+	}
+
+	var got httpAccessLogEntry
+	if err := json.Unmarshal(line, &got); err != nil {
+		t.Fatalf("log line is not json: %v", err)
+	}
+	if got.Event != "upstream_retry" || got.ErrorType != "upstream_disconnected" || got.Phase != httpAccessLogPhaseResponseHeader {
+		t.Fatalf("unexpected upstream retry fields: %+v", got)
+	}
+}
+
 func TestNewHttpUpstreamResponseTimeout(t *testing.T) {
 	server := NewHttp(nil, nil, 80, 443, false, 0, false, 2*time.Second)
 	if server.upstreamResponseTimeout != 2*time.Second {
@@ -353,6 +402,113 @@ func TestUpstreamHTTPErrorStatusCode(t *testing.T) {
 	}
 	if got := upstreamHTTPErrorStatusCode(nil); got != http.StatusBadGateway {
 		t.Fatalf("expected 502 for nil error, got %d", got)
+	}
+}
+
+func TestRetryableUpstreamDisconnect(t *testing.T) {
+	for _, errText := range []string{
+		"EOF",
+		"unexpected EOF",
+		"write tcp 127.0.0.1:1->127.0.0.1:2: write: broken pipe",
+		"read tcp: connection reset by peer",
+		"use of closed network connection",
+	} {
+		if !isRetryableUpstreamDisconnect(errors.New(errText)) {
+			t.Fatalf("expected retryable upstream disconnect for %q", errText)
+		}
+	}
+	if isRetryableUpstreamDisconnect(errors.New("i/o timeout")) {
+		t.Fatalf("timeout should keep its own failure class")
+	}
+}
+
+func TestHTTPMethodRetryableAfterResponseHeaderDisconnect(t *testing.T) {
+	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodOptions} {
+		if !isHTTPMethodRetryableAfterResponseHeaderDisconnect(method) {
+			t.Fatalf("expected %s to be retryable after response header disconnect", method)
+		}
+		if !isResponseHeaderDisconnectRetryAllowed(nil, method) {
+			t.Fatalf("expected %s to be retryable without host override", method)
+		}
+	}
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+		if isHTTPMethodRetryableAfterResponseHeaderDisconnect(method) {
+			t.Fatalf("expected %s to be non-retryable after response header disconnect", method)
+		}
+		if isResponseHeaderDisconnectRetryAllowed(nil, method) {
+			t.Fatalf("expected %s to be non-retryable without host override", method)
+		}
+		if !isResponseHeaderDisconnectRetryAllowed(&file.Host{ResponseHeaderRetryNonIdempotent: true}, method) {
+			t.Fatalf("expected %s to be retryable with host override", method)
+		}
+	}
+}
+
+func TestUpstreamDisconnectedFinalErrorText(t *testing.T) {
+	err := errors.New("unexpected EOF")
+	if got := upstreamDisconnectedFinalErrorText(httpAccessLogPhaseResponseHeader, err, 1); got != "upstream disconnected during response_header: unexpected EOF" {
+		t.Fatalf("unexpected one-attempt upstream disconnect text %q", got)
+	}
+	if got := upstreamDisconnectedFinalErrorText(httpAccessLogPhaseRequestWrite, err, 3); got != "upstream disconnected during request_write: unexpected EOF after 3 attempts" {
+		t.Fatalf("unexpected retry-exhausted upstream disconnect text %q", got)
+	}
+}
+
+func TestUpstreamDisconnectRetryConfig(t *testing.T) {
+	server := &httpServer{BaseServer: BaseServer{bridge: retryConfigBridge{retryCount: 2, retryInterval: 500 * time.Millisecond}}}
+	if got := server.upstreamDisconnectRetryAttempts(); got != 3 {
+		t.Fatalf("unexpected retry attempts %d", got)
+	}
+	if got := server.upstreamDisconnectRetryInterval(); got != 500*time.Millisecond {
+		t.Fatalf("unexpected retry interval %s", got)
+	}
+}
+
+func TestHTTPAccessLogErrorPhaseFallback(t *testing.T) {
+	oldDisabled := httpAccessLog.disabled
+	httpAccessLog.disabled = true
+	defer func() {
+		httpAccessLog.disabled = oldDisabled
+	}()
+
+	record := &httpAccessLogRecord{
+		entry: httpAccessLogEntry{
+			Timestamp:  "2026-07-20 10:11:12.013",
+			Method:     http.MethodPost,
+			URL:        "/v1/responses",
+			DurationMS: 1,
+		},
+		start: time.Now(),
+	}
+	record.Finish("EOF")
+
+	if record.entry.Phase != httpAccessLogPhaseUnknown {
+		t.Fatalf("unexpected fallback phase %q", record.entry.Phase)
+	}
+	if record.entry.ErrorType != "client_closed" {
+		t.Fatalf("unexpected error type %q", record.entry.ErrorType)
+	}
+}
+
+func TestBuildProxyHTTPRequestBytes(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "http://example.com/api/save?id=1", strings.NewReader("hello"))
+	request.RequestURI = "/api/save?id=1"
+	request.Header.Set("Content-Type", "text/plain")
+
+	got, err := buildProxyHTTPRequestBytes(request)
+	if err != nil {
+		t.Fatalf("build proxy request bytes error: %v", err)
+	}
+	text := string(got)
+	for _, want := range []string{
+		"POST /api/save?id=1 HTTP/1.1\r\n",
+		"Host: example.com\r\n",
+		"Content-Type: text/plain\r\n",
+		"\r\nhello",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("proxy request bytes missing %q in %q", want, text)
+		}
 	}
 }
 
@@ -502,6 +658,12 @@ func TestHTTPAccessLogSkipAndErrorType(t *testing.T) {
 	}
 	if got := classifyHTTPAccessLogError("write tcp: broken pipe"); got != "client_closed" {
 		t.Fatalf("unexpected error type %q", got)
+	}
+	if got := classifyHTTPAccessLogError("upstream disconnected during response_header: unexpected EOF"); got != "upstream_disconnected" {
+		t.Fatalf("unexpected upstream disconnected error type %q", got)
+	}
+	if got := classifyHTTPAccessLogError("upstream unavailable after 3 attempts: connect refused"); got != "upstream_unavailable" {
+		t.Fatalf("unexpected upstream unavailable error type %q", got)
 	}
 	if got := classifyHTTPAccessLogError("i/o timeout"); got != "timeout" {
 		t.Fatalf("unexpected timeout error type %q", got)

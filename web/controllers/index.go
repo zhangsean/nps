@@ -359,15 +359,16 @@ func (s *IndexController) AddHost() {
 			Host: s.getEscapeString("host"),
 			Target: &file.Target{TargetStr: strings.ReplaceAll(s.getEscapeString("target"), "\r\n", "\n"),
 				LocalProxy: s.GetBoolNoErr("local_proxy")},
-			HeaderChange: s.getEscapeString("header"),
-			HostChange:   s.getEscapeString("hostchange"),
-			Remark:       s.getEscapeString("remark"),
-			Location:     s.getEscapeString("location"),
-			Flow:         &file.Flow{},
-			Scheme:       s.getEscapeString("scheme"),
-			KeyFilePath:  s.getEscapeString("key_file_path"),
-			CertFilePath: s.getEscapeString("cert_file_path"),
-			AutoHttps:    s.GetBoolNoErr("AutoHttps"),
+			HeaderChange:                     s.getEscapeString("header"),
+			HostChange:                       s.getEscapeString("hostchange"),
+			Remark:                           s.getEscapeString("remark"),
+			Location:                         s.getEscapeString("location"),
+			Flow:                             &file.Flow{},
+			Scheme:                           s.getEscapeString("scheme"),
+			KeyFilePath:                      s.getEscapeString("key_file_path"),
+			CertFilePath:                     s.getEscapeString("cert_file_path"),
+			AutoHttps:                        s.GetBoolNoErr("AutoHttps"),
+			ResponseHeaderRetryNonIdempotent: s.GetBoolNoErr("response_header_retry_non_idempotent"),
 		}
 		var err error
 		if h.Client, err = file.GetDb().GetClient(s.GetIntNoErr("client_id")); err != nil {
@@ -421,6 +422,7 @@ func (s *IndexController) EditHost() {
 			h.CertFilePath = s.getEscapeString("cert_file_path")
 			h.Target.LocalProxy = s.GetBoolNoErr("local_proxy")
 			h.AutoHttps = s.GetBoolNoErr("AutoHttps")
+			h.ResponseHeaderRetryNonIdempotent = s.GetBoolNoErr("response_header_retry_non_idempotent")
 			file.GetDb().JsonDb.StoreHostToJsonFile()
 		}
 		s.AjaxOk("modified success")

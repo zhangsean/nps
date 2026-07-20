@@ -56,10 +56,15 @@ type httpAccessLogEntry struct {
 
 const (
 	httpAccessLogPhaseTargetConnect  = "target_connect"
+	httpAccessLogPhaseHostMatch      = "host_match"
+	httpAccessLogPhaseAccessControl  = "access_control"
+	httpAccessLogPhaseAuth           = "auth"
+	httpAccessLogPhaseRequestBuild   = "request_build"
 	httpAccessLogPhaseRequestWrite   = "request_write"
 	httpAccessLogPhaseResponseHeader = "response_header"
 	httpAccessLogPhaseResponseWrite  = "response_write"
 	httpAccessLogPhaseComplete       = "complete"
+	httpAccessLogPhaseUnknown        = "unknown"
 )
 
 type httpAccessLogRecord struct {
@@ -202,12 +207,20 @@ func (record *httpAccessLogRecord) TargetConnectRetryHook(source string) npsconn
 }
 
 func (record *httpAccessLogRecord) WriteTargetConnectRetry(info npsconn.RetryInfo) {
+	record.writeRetryEvent("target_connect_retry", httpAccessLogPhaseTargetConnect, info)
+}
+
+func (record *httpAccessLogRecord) WriteUpstreamRetry(info npsconn.RetryInfo, phase string) {
+	record.writeRetryEvent("upstream_retry", phase, info)
+}
+
+func (record *httpAccessLogRecord) writeRetryEvent(event string, phase string, info npsconn.RetryInfo) {
 	if record == nil {
 		return
 	}
 	entry := record.entry
-	entry.Event = "target_connect_retry"
-	entry.Phase = httpAccessLogPhaseTargetConnect
+	entry.Event = event
+	entry.Phase = phase
 	entry.DurationMS = time.Since(record.start).Milliseconds()
 	if info.Target != "" {
 		entry.Target = info.Target
@@ -237,6 +250,9 @@ func (record *httpAccessLogRecord) Finish(errText string) {
 	record.once.Do(func() {
 		record.entry.DurationMS = time.Since(record.start).Milliseconds()
 		record.entry.Error = errText
+		if errText != "" && record.entry.Phase == "" {
+			record.entry.Phase = httpAccessLogPhaseUnknown
+		}
 		record.entry.ErrorType = classifyHTTPAccessLogRecordError(record)
 		record.entry.SlowestPhase, record.entry.SlowestPhaseMS = slowestHTTPAccessLogPhase(record.entry)
 		if shouldSkipHTTPAccessLog(record) {
@@ -249,6 +265,16 @@ func (record *httpAccessLogRecord) Finish(errText string) {
 		}
 		writeHTTPAccessLog(line)
 	})
+}
+
+func (record *httpAccessLogRecord) FinishWithPhase(phase string, errText string) {
+	if record == nil {
+		return
+	}
+	if phase != "" {
+		record.SetPhase(phase)
+	}
+	record.Finish(errText)
 }
 
 func buildHTTPAccessLogLine(entry httpAccessLogEntry) ([]byte, error) {
@@ -588,6 +614,10 @@ func classifyHTTPAccessLogError(errText string) string {
 	}
 	lower := strings.ToLower(errText)
 	switch {
+	case strings.Contains(lower, "upstream disconnected"):
+		return "upstream_disconnected"
+	case strings.Contains(lower, "upstream unavailable"):
+		return "upstream_unavailable"
 	case strings.Contains(lower, "host could not be parsed"):
 		return "host_parse_error"
 	case strings.Contains(lower, "timeout"):

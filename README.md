@@ -25,6 +25,10 @@ https://natnps.com/
 
 
 ## 更新日志
+- 2026-07-21  v0.27.21
+  - **修复**：HTTP 代理上游断连时按阶段记录错误，避免异常日志缺少 `phase`。
+  - **优化**：上游请求写入断开时自动重试；读取响应头断开默认仅重试 `GET`、`HEAD`、`OPTIONS`，域名转发可单独开启非幂等请求重试。
+
 - 2026-07-17  v0.27.20
   - **优化**：默认连接参数调整为 `client_connect_timeout_seconds=2`、`target_connect_timeout_seconds=2`、`target_connect_retry_count=2`，缩短单次等待并增加目标连接重试机会。
   - **新增**：`nps.conf` 增加 `upstream_response_timeout_seconds`，用于限制 nps HTTP 代理等待上游响应头的时间，默认 0 不限制；超时返回 504。

@@ -103,6 +103,20 @@ func NewTunnel(tunnelPort int, tunnelType string, ipVerify bool, runList *sync.M
 	}
 }
 
+func (s *Bridge) TargetConnectRetryCount() int {
+	if s == nil {
+		return 0
+	}
+	return s.targetConnectRetryCount
+}
+
+func (s *Bridge) TargetConnectRetryInterval() time.Duration {
+	if s == nil {
+		return 0
+	}
+	return s.targetConnectRetryInterval
+}
+
 func (s *Bridge) StartTunnel() error {
 	go s.ping()
 	if s.tunnelType == "kcp" {

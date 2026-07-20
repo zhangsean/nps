@@ -2,8 +2,10 @@ package proxy
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/tls"
 	"io"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -34,11 +36,6 @@ type httpServer struct {
 	cache                   *cache.Cache
 	cacheLen                int
 	upstreamResponseTimeout time.Duration
-}
-
-type pendingHTTPResponseLog struct {
-	request   *http.Request
-	accessLog *httpAccessLogRecord
 }
 
 func NewHttp(bridge *bridge.Bridge, c *file.Tunnel, httpPort, httpsPort int, useCache bool, cacheLen int, addOrigin bool, upstreamResponseTimeout time.Duration) *httpServer {
@@ -155,34 +152,18 @@ func (s *httpServer) handleTunneling(w http.ResponseWriter, r *http.Request) {
 
 func (s *httpServer) handleHttp(c *conn.Conn, r *http.Request) {
 	var (
-		host              *file.Host
-		target            net.Conn
-		err               error
-		connClient        io.ReadWriteCloser
-		scheme            = r.URL.Scheme
-		lk                *conn.Link
-		targetAddr        string
-		lenConn           *conn.LenConn
-		isReset           bool
-		wg                sync.WaitGroup
-		remoteAddr        string
-		accessLogs        []*httpAccessLogRecord
-		accessLog         *httpAccessLogRecord
-		failStatus        = http.StatusNotFound
-		requestWriteStart time.Time
+		host         *file.Host
+		err          error
+		scheme       = r.URL.Scheme
+		isReset      bool
+		remoteAddr   string
+		accessLog    *httpAccessLogRecord
+		hostTmp      *file.Host
+		hostErr      error
+		requestBytes []byte
 	)
 	defer func() {
-		if connClient != nil {
-			connClient.Close()
-		} else {
-			s.writeHTTPError(c.Conn, failStatus)
-		}
 		c.Close()
-	}()
-	defer func() {
-		for _, accessLog := range accessLogs {
-			accessLog.Finish("")
-		}
 	}()
 reset:
 	if isReset {
@@ -196,6 +177,11 @@ reset:
 
 	// 判断访问地址是否在全局黑名单内
 	if IsGlobalBlackIp(c.RemoteAddr().String()) {
+		accessLog = newHTTPAccessLogRecord(r, remoteAddr, nil, "", false)
+		accessLog.SetStatusCode(http.StatusNotFound)
+		accessLog.SetRequestBytes(estimateHTTPAccessLogRequestBytes(r))
+		accessLog.SetResponseBytes(s.connectionFailResponseBytes())
+		accessLog.FinishWithPhase(httpAccessLogPhaseAccessControl, "global black ip")
 		c.Close()
 		return
 	}
@@ -205,12 +191,13 @@ reset:
 		accessLog.SetStatusCode(http.StatusNotFound)
 		accessLog.SetRequestBytes(estimateHTTPAccessLogRequestBytes(r))
 		accessLog.SetResponseBytes(s.connectionFailResponseBytes())
-		accessLog.Finish(err.Error())
+		accessLog.FinishWithPhase(httpAccessLogPhaseHostMatch, err.Error())
 		if isEmptyRequestHost(r) {
 			c.Close()
 			return
 		}
 		logs.Notice("the url %s %s %s can't be parsed!, host %s, url %s, remote address %s", r.URL.Scheme, r.Host, r.RequestURI, r.Host, r.URL.Path, remoteAddr)
+		s.writeConnFail(c.Conn)
 		c.Close()
 		return
 	}
@@ -220,8 +207,9 @@ reset:
 	if err := s.CheckFlowAndConnNum(host.Client); err != nil {
 		accessLog.SetStatusCode(http.StatusNotFound)
 		accessLog.SetResponseBytes(s.connectionFailResponseBytes())
-		accessLog.Finish(err.Error())
+		accessLog.FinishWithPhase(httpAccessLogPhaseAccessControl, err.Error())
 		logs.Warn("client id %d, host id %d, error %s, when https connection", host.Client.Id, host.Id, err.Error())
+		s.writeConnFail(c.Conn)
 		c.Close()
 		return
 	}
@@ -231,121 +219,34 @@ reset:
 	if err = s.auth(r, c, host.Client.Cnf.U, host.Client.Cnf.P); err != nil {
 		accessLog.SetStatusCode(http.StatusUnauthorized)
 		accessLog.SetResponseBytes(int64(len(common.UnauthorizedBytes)))
-		accessLog.Finish(err.Error())
+		accessLog.FinishWithPhase(httpAccessLogPhaseAuth, err.Error())
 		logs.Warn("auth error", err, r.RemoteAddr)
 		return
 	}
-	targetHosts, err := host.Target.GetRoundRobinTargets()
-	if err != nil {
-		failStatus = http.StatusBadGateway
-		accessLog.SetStatusCode(failStatus)
-		accessLog.SetResponseBytes(s.httpErrorResponseBytes(failStatus))
-		accessLog.Finish(err.Error())
-		logs.Warn(err.Error())
-		return
-	}
-	targetAddr = targetHosts[0]
-	accessLog.SetTarget(targetAddr)
 
 	// 判断访问地址是否在黑名单内
 	if common.IsBlackIp(c.RemoteAddr().String(), host.Client.VerifyKey, host.Client.BlackIpList) {
 		accessLog.SetStatusCode(http.StatusNotFound)
 		accessLog.SetResponseBytes(s.connectionFailResponseBytes())
-		accessLog.Finish("black ip")
+		accessLog.FinishWithPhase(httpAccessLogPhaseAccessControl, "black ip")
 		c.Close()
 		return
 	}
 
-	lk = conn.NewLink("http", targetAddr, host.Client.Cnf.Crypt, host.Client.Cnf.Compress, r.RemoteAddr, host.Target.LocalProxy)
-	lk.SetTargetHosts(targetHosts)
-	lk.SetTargetConnectRetryHook(accessLog.TargetConnectRetryHook("local_proxy"))
-	targetConnectStart := time.Now()
-	if target, err = s.bridge.SendLinkInfo(host.Client.Id, lk, nil); err != nil {
-		failStatus = http.StatusBadGateway
-		accessLog.SetPhase(httpAccessLogPhaseTargetConnect)
-		accessLog.AddPhaseDuration(httpAccessLogPhaseTargetConnect, time.Since(targetConnectStart))
-		accessLog.SetStatusCode(failStatus)
-		accessLog.SetResponseBytes(s.httpErrorResponseBytes(failStatus))
-		accessLog.Finish(err.Error())
-		logs.Notice("connect to target %s error %s", lk.Host, err)
-		return
-	}
-	accessLog.AddPhaseDuration(httpAccessLogPhaseTargetConnect, time.Since(targetConnectStart))
-	connClient = conn.GetConn(target, lk.Crypt, lk.Compress, host.Client.Rate, true)
-	pendingResponses := make(chan pendingHTTPResponseLog, 16)
-
-	//read from inc-client
-	wg.Add(1)
-	go func() {
-		isReset = false
-		defer connClient.Close()
-		defer func() {
-			wg.Done()
-			if !isReset {
-				c.Close()
-			}
-		}()
-
-		responseReader := bufio.NewReader(connClient)
-		for pendingResponse := range pendingResponses {
-			responseHeaderStart := time.Now()
-			if s.upstreamResponseTimeout > 0 {
-				_ = target.SetReadDeadline(time.Now().Add(s.upstreamResponseTimeout))
-			}
-			resp, err := http.ReadResponse(responseReader, pendingResponse.request)
-			if s.upstreamResponseTimeout > 0 {
-				_ = target.SetReadDeadline(time.Time{})
-			}
-			if pendingResponse.accessLog != nil {
-				pendingResponse.accessLog.AddPhaseDuration(httpAccessLogPhaseResponseHeader, time.Since(responseHeaderStart))
-			}
-			if err != nil || resp == nil {
-				if pendingResponse.accessLog != nil && err != nil {
-					statusCode := upstreamHTTPErrorStatusCode(err)
-					pendingResponse.accessLog.SetPhase(httpAccessLogPhaseResponseHeader)
-					pendingResponse.accessLog.SetStatusCode(statusCode)
-					pendingResponse.accessLog.SetResponseBytes(s.httpErrorResponseBytes(statusCode))
-					pendingResponse.accessLog.Finish(err.Error())
-					s.writeHTTPError(c.Conn, statusCode)
-				}
-				return
-			}
-			pendingResponse.accessLog.SetStatusCode(resp.StatusCode)
-			lenConn := conn.NewLenConn(c)
-			responseWriteStart := time.Now()
-			if err := resp.Write(lenConn); err != nil {
-				pendingResponse.accessLog.SetPhase(httpAccessLogPhaseResponseWrite)
-				pendingResponse.accessLog.AddPhaseDuration(httpAccessLogPhaseResponseWrite, time.Since(responseWriteStart))
-				pendingResponse.accessLog.SetResponseBytes(int64(lenConn.Len))
-				pendingResponse.accessLog.Finish(err.Error())
-				logs.Error(err)
-				return
-			}
-			if resp.Body != nil {
-				_ = resp.Body.Close()
-			}
-			pendingResponse.accessLog.SetPhase(httpAccessLogPhaseComplete)
-			pendingResponse.accessLog.AddPhaseDuration(httpAccessLogPhaseResponseWrite, time.Since(responseWriteStart))
-			pendingResponse.accessLog.SetResponseBytes(int64(lenConn.Len))
-			pendingResponse.accessLog.Finish("")
-		}
-	}()
-
 	for {
 		currentAccessLog := accessLog
 		if currentAccessLog == nil {
-			currentAccessLog = newHTTPAccessLogRecord(r, remoteAddr, host, lk.Host, false)
+			currentAccessLog = newHTTPAccessLogRecord(r, remoteAddr, host, "", false)
 			currentAccessLog.SetRequestBytes(estimateHTTPAccessLogRequestBytes(r))
-		} else {
-			currentAccessLog.SetTarget(lk.Host)
-			accessLog = nil
 		}
+		accessLog = nil
 		//if the cache start and the request is in the cache list, return the cache
 		if s.useCache {
 			if v, ok := s.cache.Get(filepath.Join(host.Host, r.URL.Path)); ok {
 				n, err := c.Write(v.([]byte))
 				if err != nil {
-					currentAccessLog.Finish(err.Error())
+					currentAccessLog.SetResponseBytes(int64(n))
+					currentAccessLog.FinishWithPhase(httpAccessLogPhaseResponseWrite, "downstream response write failed while returning cache: "+err.Error())
 					break
 				}
 				currentAccessLog.SetStatusCode(http.StatusOK)
@@ -362,60 +263,273 @@ reset:
 		}
 
 		//change the host and header and set proxy setting
-		accessLogs = append(accessLogs, currentAccessLog)
 		common.ChangeHostAndHeader(r, host.HostChange, host.HeaderChange, c.Conn.RemoteAddr().String())
-		logs.Trace("Request: %s %s://%s%s, remote addr %s, remote target %s", r.Method, r.URL.Scheme, r.Host, r.URL.Path, c.RemoteAddr().String(), lk.Host)
-		//write
-		lenConn = conn.NewLenConn(connClient)
-		//lenConn = conn.LenConn
-		requestWriteStart = time.Now()
-		if err := r.Write(lenConn); err != nil {
+		requestBytes, err = buildProxyHTTPRequestBytes(r)
+		if err != nil {
 			statusCode := http.StatusBadGateway
-			currentAccessLog.SetPhase(httpAccessLogPhaseRequestWrite)
-			currentAccessLog.AddPhaseDuration(httpAccessLogPhaseRequestWrite, time.Since(requestWriteStart))
+			currentAccessLog.SetPhase(httpAccessLogPhaseRequestBuild)
 			currentAccessLog.SetStatusCode(statusCode)
-			currentAccessLog.SetRequestBytes(int64(lenConn.Len))
 			currentAccessLog.SetResponseBytes(s.httpErrorResponseBytes(statusCode))
-			currentAccessLog.Finish(err.Error())
+			currentAccessLog.Finish("build upstream request failed: " + err.Error())
 			s.writeHTTPError(c.Conn, statusCode)
-			logs.Error("Request write error:", err)
+			logs.Error("Build proxy request error:", err)
 			break
 		}
-		currentAccessLog.AddPhaseDuration(httpAccessLogPhaseRequestWrite, time.Since(requestWriteStart))
-		currentAccessLog.SetRequestBytes(int64(lenConn.Len))
-		pendingResponses <- pendingHTTPResponseLog{request: r, accessLog: currentAccessLog}
-		host.Client.Flow.Add(int64(lenConn.Len), int64(lenConn.Len))
+		currentAccessLog.SetRequestBytes(int64(len(requestBytes)))
+		if !s.proxyHTTPRequestWithRetry(c, host, r, requestBytes, currentAccessLog) {
+			break
+		}
+		host.Client.Flow.Add(int64(len(requestBytes)), int64(len(requestBytes)))
 
 	readReq:
 		//read req from connection
 		r, err = http.ReadRequest(bufio.NewReader(c))
 		if err != nil {
-			for _, pendingAccessLog := range accessLogs {
-				pendingAccessLog.Finish(err.Error())
-			}
 			break
 		}
 		r.URL.Scheme = scheme
 		//What happened ，Why one character less???
 		r.Method = resetReqMethod(r.Method)
-		if hostTmp, err := file.GetDb().GetInfoByHost(r.Host, r); err != nil {
-			s.finishHTTPNotFoundAccessLogWithBytes(r, remoteAddr, estimateHTTPAccessLogRequestBytes(r), 0, err.Error())
+		hostTmp, hostErr = file.GetDb().GetInfoByHost(r.Host, r)
+		if hostErr != nil {
+			s.finishHTTPNotFoundAccessLogWithBytes(r, remoteAddr, estimateHTTPAccessLogRequestBytes(r), 0, hostErr.Error())
 			if isEmptyRequestHost(r) {
 				break
 			}
 			logs.Notice("The url %s://%s%s can't be parsed!", r.URL.Scheme, r.Host, r.RequestURI)
 			break
-		} else if host != hostTmp {
-			host = hostTmp
-			isReset = true
-			close(pendingResponses)
-			connClient.Close()
-			wg.Wait()
-			goto reset
+		}
+		host = hostTmp
+		isReset = true
+		goto reset
+	}
+}
+
+func (s *httpServer) proxyHTTPRequestWithRetry(c *conn.Conn, host *file.Host, r *http.Request, requestBytes []byte, accessLog *httpAccessLogRecord) bool {
+	attempts := s.upstreamDisconnectRetryAttempts()
+	if attempts < 1 {
+		attempts = 1
+	}
+	retryInterval := s.upstreamDisconnectRetryInterval()
+	for attempt := 1; attempt <= attempts; attempt++ {
+		ok, retryable, phase, targetAddr, err := s.proxyHTTPRequestOnce(c, host, r, requestBytes, accessLog)
+		if ok {
+			return true
+		}
+		if !retryable || attempt == attempts {
+			finishedAttempts := attempt
+			if phase == httpAccessLogPhaseTargetConnect {
+				finishedAttempts = attempts
+			}
+			s.finishHTTPUpstreamError(c, accessLog, phase, err, finishedAttempts)
+			return false
+		}
+		delay := randomHTTPUpstreamRetryDelay(retryInterval)
+		accessLog.WriteUpstreamRetry(conn.RetryInfo{
+			Source:   "local_proxy",
+			ConnType: common.CONN_TCP,
+			Target:   targetAddr,
+			Attempt:  attempt,
+			Attempts: attempts,
+			Delay:    delay,
+			Error:    upstreamDisconnectedErrorText(phase, err),
+		}, phase)
+		if delay > 0 {
+			time.Sleep(delay)
 		}
 	}
-	close(pendingResponses)
-	wg.Wait()
+	return false
+}
+
+func (s *httpServer) proxyHTTPRequestOnce(c *conn.Conn, host *file.Host, r *http.Request, requestBytes []byte, accessLog *httpAccessLogRecord) (ok bool, retryable bool, phase string, targetAddr string, err error) {
+	targetHosts, err := host.Target.GetRoundRobinTargets()
+	if err != nil {
+		return false, false, httpAccessLogPhaseTargetConnect, "", err
+	}
+	targetAddr = targetHosts[0]
+	accessLog.SetTarget(targetAddr)
+	logs.Trace("Request: %s %s://%s%s, remote addr %s, remote target %s", r.Method, r.URL.Scheme, r.Host, r.URL.Path, c.RemoteAddr().String(), targetAddr)
+
+	lk := conn.NewLink("http", targetAddr, host.Client.Cnf.Crypt, host.Client.Cnf.Compress, r.RemoteAddr, host.Target.LocalProxy)
+	lk.SetTargetHosts(targetHosts)
+	lk.SetTargetConnectRetryHook(accessLog.TargetConnectRetryHook("local_proxy"))
+	targetConnectStart := time.Now()
+	target, err := s.bridge.SendLinkInfo(host.Client.Id, lk, nil)
+	accessLog.AddPhaseDuration(httpAccessLogPhaseTargetConnect, time.Since(targetConnectStart))
+	if err != nil {
+		logs.Notice("connect to target %s error %s", lk.Host, err)
+		return false, false, httpAccessLogPhaseTargetConnect, targetAddr, err
+	}
+	connClient := conn.GetConn(target, lk.Crypt, lk.Compress, host.Client.Rate, true)
+	defer connClient.Close()
+
+	requestWriteStart := time.Now()
+	lenConn := conn.NewLenConn(connClient)
+	if _, err = lenConn.Write(requestBytes); err != nil {
+		accessLog.SetPhase(httpAccessLogPhaseRequestWrite)
+		accessLog.AddPhaseDuration(httpAccessLogPhaseRequestWrite, time.Since(requestWriteStart))
+		logs.Error("Request write error:", err)
+		return false, isRetryableUpstreamDisconnect(err), httpAccessLogPhaseRequestWrite, targetAddr, err
+	}
+	accessLog.AddPhaseDuration(httpAccessLogPhaseRequestWrite, time.Since(requestWriteStart))
+
+	responseHeaderStart := time.Now()
+	if s.upstreamResponseTimeout > 0 {
+		_ = target.SetReadDeadline(time.Now().Add(s.upstreamResponseTimeout))
+	}
+	resp, err := http.ReadResponse(bufio.NewReader(connClient), r)
+	if s.upstreamResponseTimeout > 0 {
+		_ = target.SetReadDeadline(time.Time{})
+	}
+	accessLog.AddPhaseDuration(httpAccessLogPhaseResponseHeader, time.Since(responseHeaderStart))
+	if err != nil || resp == nil {
+		if err == nil {
+			err = io.ErrUnexpectedEOF
+		}
+		accessLog.SetPhase(httpAccessLogPhaseResponseHeader)
+		return false, isRetryableUpstreamDisconnect(err) && isResponseHeaderDisconnectRetryAllowed(host, r.Method), httpAccessLogPhaseResponseHeader, targetAddr, err
+	}
+	defer func() {
+		if resp.Body != nil {
+			_ = resp.Body.Close()
+		}
+	}()
+
+	accessLog.SetStatusCode(resp.StatusCode)
+	responseWriteStart := time.Now()
+	responseConn := conn.NewLenConn(c)
+	if err = resp.Write(responseConn); err != nil {
+		accessLog.SetPhase(httpAccessLogPhaseResponseWrite)
+		accessLog.AddPhaseDuration(httpAccessLogPhaseResponseWrite, time.Since(responseWriteStart))
+		accessLog.SetResponseBytes(int64(responseConn.Len))
+		accessLog.Finish("downstream response write failed after upstream status " + strconv.Itoa(resp.StatusCode) + ": " + err.Error())
+		logs.Error(err)
+		return false, false, httpAccessLogPhaseResponseWrite, targetAddr, err
+	}
+	accessLog.SetPhase(httpAccessLogPhaseComplete)
+	accessLog.AddPhaseDuration(httpAccessLogPhaseResponseWrite, time.Since(responseWriteStart))
+	accessLog.SetResponseBytes(int64(responseConn.Len))
+	accessLog.Finish("")
+	return true, false, httpAccessLogPhaseComplete, targetAddr, nil
+}
+
+func (s *httpServer) finishHTTPUpstreamError(c *conn.Conn, accessLog *httpAccessLogRecord, phase string, err error, attempts int) {
+	statusCode := upstreamHTTPErrorStatusCode(err)
+	if phase == httpAccessLogPhaseTargetConnect {
+		statusCode = http.StatusBadGateway
+	}
+	accessLog.SetPhase(phase)
+	accessLog.SetStatusCode(statusCode)
+	accessLog.SetResponseBytes(s.httpErrorResponseBytes(statusCode))
+	if phase == httpAccessLogPhaseTargetConnect {
+		accessLog.Finish(upstreamUnavailableErrorText(err, attempts))
+	} else if isRetryableUpstreamDisconnect(err) {
+		accessLog.Finish(upstreamDisconnectedFinalErrorText(phase, err, attempts))
+	} else if err != nil {
+		accessLog.Finish(err.Error())
+	} else {
+		accessLog.Finish(upstreamUnavailableErrorText(err, attempts))
+	}
+	s.writeHTTPError(c.Conn, statusCode)
+}
+
+type upstreamRetryConfigProvider interface {
+	TargetConnectRetryCount() int
+	TargetConnectRetryInterval() time.Duration
+}
+
+func (s *httpServer) upstreamDisconnectRetryAttempts() int {
+	provider, ok := s.bridge.(upstreamRetryConfigProvider)
+	if !ok {
+		return 1
+	}
+	retryCount := provider.TargetConnectRetryCount()
+	if retryCount < 0 {
+		return 1
+	}
+	return retryCount + 1
+}
+
+func (s *httpServer) upstreamDisconnectRetryInterval() time.Duration {
+	provider, ok := s.bridge.(upstreamRetryConfigProvider)
+	if !ok {
+		return 0
+	}
+	interval := provider.TargetConnectRetryInterval()
+	if interval < 0 {
+		return 0
+	}
+	return interval
+}
+
+func buildProxyHTTPRequestBytes(r *http.Request) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := r.Write(&buf); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func isRetryableUpstreamDisconnect(err error) bool {
+	if err == nil {
+		return false
+	}
+	lower := strings.ToLower(err.Error())
+	return lower == "eof" ||
+		strings.Contains(lower, "unexpected eof") ||
+		strings.Contains(lower, "broken pipe") ||
+		strings.Contains(lower, "connection reset") ||
+		strings.Contains(lower, "forcibly closed") ||
+		strings.Contains(lower, "use of closed network connection")
+}
+
+func isHTTPMethodRetryableAfterResponseHeaderDisconnect(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	default:
+		return false
+	}
+}
+
+func isResponseHeaderDisconnectRetryAllowed(host *file.Host, method string) bool {
+	if isHTTPMethodRetryableAfterResponseHeaderDisconnect(method) {
+		return true
+	}
+	return host != nil && host.ResponseHeaderRetryNonIdempotent
+}
+
+func randomHTTPUpstreamRetryDelay(maxInterval time.Duration) time.Duration {
+	maxMs := maxInterval.Milliseconds()
+	if maxMs <= 0 {
+		return 0
+	}
+	return time.Duration(rand.Int63n(maxMs)+1) * time.Millisecond
+}
+
+func upstreamDisconnectedErrorText(phase string, err error) string {
+	if err == nil {
+		return "upstream disconnected during " + phase
+	}
+	return "upstream disconnected during " + phase + ": " + err.Error()
+}
+
+func upstreamDisconnectedAfterRetriesErrorText(phase string, err error, attempts int) string {
+	return upstreamDisconnectedErrorText(phase, err) + " after " + strconv.Itoa(attempts) + " attempts"
+}
+
+func upstreamDisconnectedFinalErrorText(phase string, err error, attempts int) string {
+	if attempts <= 1 {
+		return upstreamDisconnectedErrorText(phase, err)
+	}
+	return upstreamDisconnectedAfterRetriesErrorText(phase, err, attempts)
+}
+
+func upstreamUnavailableErrorText(err error, attempts int) string {
+	if err == nil {
+		return "upstream unavailable after " + strconv.Itoa(attempts) + " attempts"
+	}
+	return "upstream unavailable after " + strconv.Itoa(attempts) + " attempts: " + err.Error()
 }
 
 func resetReqMethod(method string) string {
@@ -481,6 +595,7 @@ func (s *httpServer) finishHTTPNotFoundAccessLogWithBytes(r *http.Request, remot
 		errText = "host not matched"
 	}
 	accessLog := newHTTPAccessLogRecord(r, remoteAddr, nil, "", false)
+	accessLog.SetPhase(httpAccessLogPhaseHostMatch)
 	accessLog.SetStatusCode(http.StatusNotFound)
 	accessLog.SetRequestBytes(requestBytes)
 	accessLog.SetResponseBytes(responseBytes)
