@@ -28,6 +28,7 @@ https://natnps.com/
 - 2026-07-21  v0.27.21
   - **修复**：HTTP 代理上游断连时按阶段记录错误，避免异常日志缺少 `phase`。
   - **优化**：上游请求写入断开时自动重试；读取响应头断开默认仅重试 `GET`、`HEAD`、`OPTIONS`，域名转发可单独开启非幂等请求重试。
+  - **修复**：编辑或克隆域名隧道时保留原客户端 ID，避免保存表单时客户端 ID 丢失。
 
 - 2026-07-17  v0.27.20
   - **优化**：默认连接参数调整为 `client_connect_timeout_seconds=2`、`target_connect_timeout_seconds=2`、`target_connect_retry_count=2`，缩短单次等待并增加目标连接重试机会。

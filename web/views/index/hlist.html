@@ -191,9 +191,9 @@
                 visible: true,//false表示不显示
                 formatter: function (value, row, index) {
                     var buttons = ['<div class="btn-group">'];
-                    buttons.push('<a href="' + hostBaseUrl + '/index/edithost?id=' + row.Id
+                    buttons.push('<a href="' + hostBaseUrl + '/index/edithost?id=' + row.Id + '&client_id=' + row.Client.Id
                         + '" class="btn btn-outline btn-success list-form-link"><i class="fa fa-edit"></i></a>');
-                    buttons.push('<a href="' + hostBaseUrl + '/index/addhost?id=' + row.Id
+                    buttons.push('<a href="' + hostBaseUrl + '/index/addhost?id=' + row.Id + '&client_id=' + row.Client.Id
                         + '" class="btn btn-outline btn-primary list-form-link"><i class="fa fa-copy"></i></a>');
                     buttons.push(hostActionButton('delete', '/index/delhost', row.Id, 'btn-danger', 'fa-trash'));
                     buttons.push('</div>');

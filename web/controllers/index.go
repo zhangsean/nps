@@ -345,6 +345,7 @@ func (s *IndexController) AddHost() {
 			newHost := deepcopy.Copy(h).(*file.Host)
 			newHost.Id = 0
 			s.Data["h"] = newHost
+			s.Data["client_id"] = h.Client.Id
 			s.SetInfo("Clone host")
 			s.display("index/hedit")
 		} else {
@@ -389,6 +390,7 @@ func (s *IndexController) EditHost() {
 			s.error()
 		} else {
 			s.Data["h"] = h
+			s.Data["client_id"] = h.Client.Id
 		}
 		s.SetInfo("edit")
 		s.display("index/hedit")
