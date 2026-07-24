@@ -5319,6 +5319,16 @@ table.table-mail tr td {
   font-size: 16px;
   flex: 0 0 auto;
 }
+#nps-confirm.is-danger .nps-confirm-dialog {
+  border-top: 3px solid #ed5565;
+}
+#nps-confirm.is-danger .nps-confirm-icon {
+  background: #fff0f2;
+  color: #ed5565;
+}
+#nps-confirm.is-danger .nps-confirm-title {
+  color: #c92f42;
+}
 .nps-confirm-title {
   color: #2f4050;
   font-size: 16px;

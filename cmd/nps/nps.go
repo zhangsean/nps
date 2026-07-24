@@ -15,6 +15,7 @@ import (
 
 	"ehang.io/nps/lib/file"
 	"ehang.io/nps/lib/install"
+	processrestart "ehang.io/nps/lib/restart"
 	"ehang.io/nps/lib/version"
 	"ehang.io/nps/server"
 	"ehang.io/nps/server/connection"
@@ -36,6 +37,13 @@ var (
 )
 
 func main() {
+	if len(os.Args) == 3 && os.Args[1] == processrestart.HelperCommand {
+		if err := processrestart.RunHelper(os.Args[2]); err != nil {
+			log.Printf("restart helper error: %v", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	flag.Parse()
 	// init log
@@ -110,6 +118,9 @@ func main() {
 	s, err := service.New(prg, svcConfig)
 	if err != nil {
 		logs.Error(err, "service function disabled")
+		if configureErr := processrestart.Configure(false); configureErr != nil {
+			logs.Error("configure process restart: %v", configureErr)
+		}
 		run()
 		// run without service
 		wg := sync.WaitGroup{}
@@ -190,6 +201,9 @@ type nps struct {
 
 func (p *nps) Start(s service.Service) error {
 	_, _ = s.Status()
+	if err := processrestart.Configure(!service.Interactive()); err != nil {
+		return err
+	}
 	go p.run()
 	return nil
 }

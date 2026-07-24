@@ -172,7 +172,9 @@ function npsNotify(message, status) {
     }, 3000);
 }
 
-function npsConfirm(message, onConfirm) {
+function npsConfirm(message, onConfirm, options) {
+    options = options || {};
+    var danger = options.danger === true;
     var confirmBox = $("#nps-confirm");
     if (!confirmBox.length) {
         confirmBox = $(
@@ -213,10 +215,14 @@ function npsConfirm(message, onConfirm) {
     }
 
     var isZh = (languages['current'] || '').indexOf('zh') === 0;
-    confirmBox.find(".nps-confirm-title").text(isZh ? "操作确认" : "Confirm action");
+    confirmBox.toggleClass("is-danger", danger);
+    confirmBox.find(".nps-confirm-title").text(danger ? (isZh ? "危险操作确认" : "Confirm dangerous action") : (isZh ? "操作确认" : "Confirm action"));
     confirmBox.find(".nps-confirm-message").text(message || "");
     confirmBox.find(".nps-confirm-cancel").text(npsLangValue("word-cancel", isZh ? "取消" : "Cancel"));
-    confirmBox.find(".nps-confirm-ok").text(isZh ? "确定" : "OK");
+    confirmBox.find(".nps-confirm-ok")
+        .toggleClass("btn-primary", !danger)
+        .toggleClass("btn-danger", danger)
+        .text(danger ? (isZh ? (options.confirmTextZh || "确认执行") : (options.confirmTextEn || "Continue")) : (isZh ? "确定" : "OK"));
     confirmBox.data("onConfirm", onConfirm);
     confirmBox.attr("aria-hidden", "false").addClass("is-show");
     confirmBox.find(".nps-confirm-cancel").trigger("focus");
@@ -287,7 +293,7 @@ function submitform(action, url, postdata) {
             var message = (langobj[languages['current']] || langobj[languages['default']] || 'Are you sure you want to ' + action + ' it?');
             npsConfirm(message, function () {
                 submitAction(true);
-            });
+            }, action === 'delete' ? { danger: true, confirmTextZh: '确认删除', confirmTextEn: 'Delete' } : null);
             return;
         case 'add':
         case 'edit':

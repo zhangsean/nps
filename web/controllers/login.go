@@ -10,6 +10,7 @@ import (
 
 	"ehang.io/nps/lib/common"
 	"ehang.io/nps/lib/file"
+	"ehang.io/nps/lib/version"
 	"ehang.io/nps/server"
 	"github.com/astaxie/beego"
 )
@@ -20,6 +21,7 @@ type LoginController struct {
 
 var ipRecord sync.Map
 var cpt *captcha.Captcha
+var processInstanceID = newConfigCSRFToken()
 
 type record struct {
 	hasLoginFailTimes int
@@ -39,6 +41,7 @@ func (self *LoginController) Index() {
 		self.Redirect(webBaseUrl+"/index/index", 302)
 	}
 	self.Data["web_base_url"] = webBaseUrl
+	self.Data["version"] = version.VERSION
 	self.Data["register_allow"], _ = beego.AppConfig.Bool("allow_user_register")
 	self.Data["captcha_open"], _ = beego.AppConfig.Bool("open_captcha")
 	self.TplName = "login/index.html"
@@ -59,6 +62,15 @@ func (self *LoginController) Verify() {
 		self.Data["json"] = map[string]interface{}{"status": 1, "msg": "login success"}
 	} else {
 		self.Data["json"] = map[string]interface{}{"status": 0, "msg": "info-login-password-wrong"}
+	}
+	self.ServeJSON()
+}
+
+func (self *LoginController) RestartStatus() {
+	self.Ctx.Output.Header("Cache-Control", "no-store")
+	self.Data["json"] = map[string]interface{}{
+		"status":      1,
+		"instance_id": processInstanceID,
 	}
 	self.ServeJSON()
 }
@@ -126,6 +138,7 @@ func (self *LoginController) doLogin(username, password string, explicit bool) b
 func (self *LoginController) Register() {
 	if self.Ctx.Request.Method == "GET" {
 		self.Data["web_base_url"] = beego.AppConfig.String("web_base_url")
+		self.Data["version"] = version.VERSION
 		self.TplName = "login/register.html"
 	} else {
 		if b, err := beego.AppConfig.Bool("allow_user_register"); err != nil || !b {

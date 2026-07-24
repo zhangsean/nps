@@ -11,6 +11,7 @@ import (
 	"ehang.io/nps/lib/common"
 	"ehang.io/nps/lib/crypt"
 	"ehang.io/nps/lib/file"
+	"ehang.io/nps/lib/version"
 	"ehang.io/nps/server"
 	"github.com/astaxie/beego"
 )
@@ -24,6 +25,7 @@ type BaseController struct {
 //初始化参数
 func (s *BaseController) Prepare() {
 	s.Data["web_base_url"] = beego.AppConfig.String("web_base_url")
+	s.Data["version"] = version.VERSION
 	controllerName, actionName := s.GetControllerAndAction()
 	s.controllerName = strings.ToLower(controllerName[0 : len(controllerName)-10])
 	s.actionName = strings.ToLower(actionName)

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -11,8 +12,10 @@ import (
 
 	"ehang.io/nps/lib/common"
 	"ehang.io/nps/lib/npsconfig"
+	processrestart "ehang.io/nps/lib/restart"
 	"ehang.io/nps/server"
 	"github.com/astaxie/beego"
+	"github.com/astaxie/beego/logs"
 )
 
 const configCSRFSessionKey = "nps_config_csrf"
@@ -31,6 +34,7 @@ type configSaveResponse struct {
 	RestartRequired []string `json:"restart_required,omitempty"`
 	Deferred        []string `json:"deferred,omitempty"`
 	CSRFToken       string   `json:"csrf_token,omitempty"`
+	InstanceID      string   `json:"instance_id,omitempty"`
 }
 
 func (s *ConfigController) Index() {
@@ -113,6 +117,33 @@ func (s *ConfigController) Save() {
 		RestartRequired: plan.RestartRequired,
 		Deferred:        plan.Deferred,
 		CSRFToken:       newToken,
+	})
+}
+
+func (s *ConfigController) Restart() {
+	s.requireConfigAdmin(true)
+	s.Ctx.Output.Header("Cache-Control", "no-store")
+	if s.Ctx.Request.Method != http.MethodPost {
+		s.writeConfigJSON(http.StatusMethodNotAllowed, configSaveResponse{Status: 0, Message: "method not allowed"})
+		return
+	}
+	if !s.validConfigCSRFToken(s.GetString("csrf_token")) {
+		s.writeConfigJSON(http.StatusForbidden, configSaveResponse{Status: 0, Message: "配置页面已过期，请刷新后重试"})
+		return
+	}
+	if err := processrestart.Request(); err != nil {
+		status := http.StatusServiceUnavailable
+		if errors.Is(err, processrestart.ErrAlreadyPending) {
+			status = http.StatusConflict
+		}
+		s.writeConfigJSON(status, configSaveResponse{Status: 0, Message: "无法启动重启流程：" + err.Error()})
+		return
+	}
+	logs.Notice("NPS process restart requested from web by %s", s.Ctx.Input.IP())
+	s.writeConfigJSON(http.StatusAccepted, configSaveResponse{
+		Status:     1,
+		Message:    "NPS 正在重启，代理连接会短暂中断",
+		InstanceID: processInstanceID,
 	})
 }
 

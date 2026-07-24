@@ -103,8 +103,14 @@
     white-space: pre;
 }
 #config-content:focus { box-shadow: inset 3px 0 0 #1ab47b; }
-.runtime-save { width: 100%; min-height: 42px; }
-.runtime-save[disabled] { cursor: wait; opacity: .65; }
+.runtime-save,
+.runtime-restart {
+    width: 100%;
+    min-height: 42px;
+    white-space: nowrap;
+}
+.runtime-save[disabled],
+.runtime-restart[disabled] { cursor: wait; opacity: .65; }
 .runtime-side {
     display: grid;
     gap: 12px;
@@ -114,6 +120,9 @@
     grid-auto-rows: max-content;
 }
 .runtime-side-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 112px;
+    gap: 8px;
     padding: 12px;
     border: 1px solid #cbd9d2;
     border-radius: 3px;
@@ -257,6 +266,9 @@
                                 <button class="btn btn-success runtime-save" id="config-save" type="submit" form="runtime-config-form">
                                     <i class="fa fa-check-circle m-r-xs"></i><span langtag="word-savehotreload"></span>
                                 </button>
+                                <button class="btn btn-danger runtime-restart" id="config-restart" type="button">
+                                    <i class="fa fa-power-off m-r-xs"></i><span langtag="word-restartnps"></span>
+                                </button>
                             </div>
                             <section class="runtime-result" id="config-result" role="status" aria-live="polite">
                                 <strong id="config-result-message"></strong>
@@ -301,6 +313,7 @@
     var lineBox = $('#config-lines');
     var dirty = $('#config-dirty');
     var saveButton = $('#config-save');
+    var restartButton = $('#config-restart');
     var result = $('#config-result');
     var baseline = editor.val();
 
@@ -377,6 +390,57 @@
                 saveButton.prop('disabled', false).find('span').text('保存并热加载');
             });
         });
+    });
+
+    function waitForRestart(previousInstanceID, deadline) {
+        $.ajax({
+            type: 'GET',
+            url: window.nps.web_base_url + '/login/restartstatus?_=' + Date.now(),
+            dataType: 'json',
+            cache: false,
+            timeout: 2000
+        }).done(function (response) {
+            if (response.instance_id && response.instance_id !== previousInstanceID) {
+                window.location.href = window.nps.web_base_url + '/login/index';
+                return;
+            }
+            if (Date.now() < deadline) setTimeout(function () { waitForRestart(previousInstanceID, deadline); }, 700);
+            else restartTimedOut();
+        }).fail(function () {
+            if (Date.now() < deadline) setTimeout(function () { waitForRestart(previousInstanceID, deadline); }, 700);
+            else restartTimedOut();
+        });
+    }
+
+    function restartTimedOut() {
+        showResult({ msg: '未检测到管理端恢复。若修改了 Web 地址或端口，请使用新地址访问。' }, false);
+        restartButton.prop('disabled', false).find('span').text('重启 NPS');
+    }
+
+    restartButton.on('click', function () {
+        var unsavedWarning = editor.val() !== baseline ? '当前有未保存修改，重启后会丢失。' : '';
+        npsConfirm(unsavedWarning + '确认重启 NPS？所有代理连接会短暂中断。', function () {
+            saveButton.prop('disabled', true);
+            restartButton.prop('disabled', true).find('span').text('正在重启');
+            $.ajax({
+                type: 'POST',
+                url: window.nps.web_base_url + '/config/restart',
+                dataType: 'json',
+                data: { csrf_token: $('#config-csrf').val() }
+            }).done(function (response) {
+                showResult(response, response.status === 1);
+                if (response.status === 1 && response.instance_id) {
+                    setTimeout(function () { waitForRestart(response.instance_id, Date.now() + 60000); }, 900);
+                    return;
+                }
+                saveButton.prop('disabled', false);
+                restartButton.prop('disabled', false).find('span').text('重启 NPS');
+            }).fail(function (xhr) {
+                showResult(xhr.responseJSON || { msg: '重启请求失败：HTTP ' + xhr.status }, false);
+                saveButton.prop('disabled', false);
+                restartButton.prop('disabled', false).find('span').text('重启 NPS');
+            });
+        }, { danger: true, confirmTextZh: '确定重启', confirmTextEn: 'Restart' });
     });
 
     updateLines();

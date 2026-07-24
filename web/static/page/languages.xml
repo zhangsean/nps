@@ -644,6 +644,10 @@
 		<zh-CN>保存并热加载</zh-CN>
 		<en-US>Save and hot reload</en-US>
 	</lang>
+	<lang id="word-restartnps">
+		<zh-CN>重启 NPS</zh-CN>
+		<en-US>Restart NPS</en-US>
+	</lang>
 	<lang id="word-hotconfig">
 		<zh-CN>热生效配置</zh-CN>
 		<en-US>Hot-applied configuration</en-US>
