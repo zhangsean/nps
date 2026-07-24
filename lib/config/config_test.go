@@ -78,3 +78,21 @@ func TestGetTitleContent(t *testing.T) {
 		t.Fail()
 	}
 }
+
+func TestDealTunnelParsesFileBrowseURL(t *testing.T) {
+	tunnel := dealTunnel(`mode=file
+server_port=9100
+local_path=/files
+strip_pre=/web/
+browse_url=https://files.example.com/download
+allow_browse=true
+browse_password=view
+allow_upload=true
+upload_password=manage`)
+	if tunnel.Mode != "file" || tunnel.BrowseURL != "https://files.example.com/download" {
+		t.Fatalf("unexpected file tunnel browse URL: %#v", tunnel)
+	}
+	if !tunnel.AllowBrowse || tunnel.BrowsePass != "view" || !tunnel.AllowUpload || tunnel.UploadPass != "manage" {
+		t.Fatalf("unexpected file tunnel permissions: %#v", tunnel)
+	}
+}

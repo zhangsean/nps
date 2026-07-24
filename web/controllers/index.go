@@ -33,6 +33,13 @@ func getTunnelClientId(t *file.Tunnel, requestedClientId int) int {
 }
 
 func validateTunnelUpload(t *file.Tunnel) string {
+	if t.Mode == "file" {
+		browseURL, err := fileserver.NormalizeBrowseURL(t.BrowseURL)
+		if err != nil {
+			return "browse address must be an absolute HTTP or HTTPS URL"
+		}
+		t.BrowseURL = browseURL
+	}
 	if t.Mode == "file" && t.AllowBrowse && strings.TrimSpace(t.BrowsePass) == "" {
 		return "browse password cannot be empty"
 	}
@@ -162,6 +169,7 @@ func (s *IndexController) Add() {
 			Password:    s.getEscapeString("password"),
 			LocalPath:   s.getEscapeString("local_path"),
 			StripPre:    s.getEscapeString("strip_pre"),
+			BrowseURL:   s.getEscapeString("browse_url"),
 			AllowBrowse: s.GetBoolNoErr("allow_browse"),
 			BrowsePass:  s.getEscapeString("browse_password"),
 			AllowUpload: s.GetBoolNoErr("allow_upload"),
@@ -252,6 +260,7 @@ func (s *IndexController) Edit() {
 			t.Id = id
 			t.LocalPath = s.getEscapeString("local_path")
 			t.StripPre = s.getEscapeString("strip_pre")
+			t.BrowseURL = s.getEscapeString("browse_url")
 			t.AllowBrowse = s.GetBoolNoErr("allow_browse")
 			t.BrowsePass = s.getEscapeString("browse_password")
 			t.AllowUpload = s.GetBoolNoErr("allow_upload")

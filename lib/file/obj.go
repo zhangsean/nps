@@ -146,6 +146,7 @@ type Tunnel struct {
 	IsHttp       bool
 	LocalPath    string
 	StripPre     string
+	BrowseURL    string
 	AllowBrowse  bool
 	BrowsePass   string
 	AllowUpload  bool

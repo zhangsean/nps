@@ -148,6 +148,10 @@
 		<zh-CN>启用浏览认证</zh-CN>
 		<en-US>Enable browse authentication</en-US>
 	</lang>
+	<lang id="word-browseurl">
+		<zh-CN>浏览地址</zh-CN>
+		<en-US>Browse URL</en-US>
+	</lang>
 	<lang id="word-cancel">
 		<zh-CN>取消</zh-CN>
 		<en-US>Cancel</en-US>
@@ -553,6 +557,10 @@
 	<lang id="word-browsepassword">
 		<zh-CN>浏览密码</zh-CN>
 		<en-US>Browse password</en-US>
+	</lang>
+	<lang id="info-browseurl">
+		<zh-CN>用于浏览路径展示和复制文件完整地址，例如 https://files.example.com/download</zh-CN>
+		<en-US>Public base URL shown in the browser and used when copying file links</en-US>
 	</lang>
 	<lang id="word-true">
 		<zh-CN>是</zh-CN>

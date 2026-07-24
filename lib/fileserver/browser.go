@@ -38,6 +38,7 @@ const directoryPageStyle = `
   --shadow: 0 18px 45px rgba(21, 32, 43, .09);
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   margin: 0;
   min-height: 100vh;
@@ -120,6 +121,17 @@ a.crumb:hover {
   color: #8aa3a0;
   font-size: .8em;
   font-weight: 700;
+}
+.browse-base {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 3px 0 7px;
+  color: #334155;
+  font-size: .72em;
+  font-weight: 750;
+  letter-spacing: -.02em;
+  overflow-wrap: anywhere;
 }
 .login-corner {
   grid-column: 2;
@@ -270,6 +282,102 @@ form {
 .panel-actions > form.action-form {
   flex: 1 1 620px;
 }
+.upload-form {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+}
+.upload-pick-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: end;
+}
+.resume-hint {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid #d97706;
+  border-radius: 0 7px 7px 0;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.transfer-console {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(15, 118, 110, .22);
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f1faf8, #f8fafc 68%);
+}
+.transfer-head,
+.transfer-stats,
+.transfer-job-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.transfer-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+.transfer-percent {
+  color: var(--accent-strong);
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 18px;
+  font-weight: 850;
+}
+.progress-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dce9e7;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, .1);
+}
+.progress-value {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0f766e, #14b8a6);
+  box-shadow: 0 0 12px rgba(20, 184, 166, .34);
+  transition: width .18s ease;
+}
+.transfer-stats {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 12px;
+}
+.transfer-jobs {
+  display: grid;
+  gap: 8px;
+}
+.transfer-job {
+  display: grid;
+  gap: 7px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(15, 118, 110, .14);
+}
+.transfer-job-name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.transfer-job-state {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.transfer-job .progress-track {
+  height: 5px;
+}
 .action-form .field {
   flex: 1 1 auto;
   min-width: 0;
@@ -373,6 +481,17 @@ input:focus {
   border-color: #ffaaa2;
   background: #ffe5e1;
 }
+.btn.copy {
+  height: 34px;
+  padding: 0 10px;
+  border-color: rgba(15, 118, 110, .24);
+  background: #edf9f7;
+  color: var(--accent-strong);
+}
+.btn.copy:hover {
+  border-color: rgba(15, 118, 110, .42);
+  background: #dff3ef;
+}
 .table-wrap {
   overflow: hidden;
 }
@@ -438,7 +557,12 @@ tbody tr:last-child td {
   color: var(--muted);
 }
 .ops {
-  width: 120px;
+  width: 190px;
+}
+.entry-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 7px;
 }
 .delete-form {
   display: inline-flex;
@@ -500,6 +624,20 @@ tbody tr:last-child td {
   color: var(--muted);
   text-align: center;
 }
+.copy-toast {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 40;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 11px 14px;
+  border: 1px solid rgba(15, 118, 110, .25);
+  border-radius: 8px;
+  background: #0f3d3a;
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, .22);
+}
 @media (max-width: 760px) {
   .page {
     width: min(100% - 20px, 1180px);
@@ -516,6 +654,9 @@ tbody tr:last-child td {
   .inline-form {
     display: grid;
     width: 100%;
+  }
+  .upload-pick-row {
+    grid-template-columns: 1fr;
   }
   .panel-head {
     align-items: stretch;
@@ -545,6 +686,7 @@ tbody tr:last-child td {
 `
 
 type BrowserOptions struct {
+	BrowseURL      string
 	AllowBrowse    bool
 	BrowsePassword string
 	AllowUpload    bool
@@ -554,10 +696,28 @@ type BrowserOptions struct {
 type Browser struct {
 	root           string
 	stripPrefix    string
+	browseURL      string
 	allowBrowse    bool
 	browsePassword string
 	allowUpload    bool
 	uploadPassword string
+	uploads        *uploadManager
+}
+
+func NormalizeBrowseURL(rawURL string) (string, error) {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return "", nil
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return "", fmt.Errorf("browse address must be an absolute HTTP or HTTPS URL")
+	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("browse address cannot contain credentials, query parameters, or fragments")
+	}
+	parsed.Path = strings.TrimRight(parsed.Path, "/")
+	return strings.TrimRight(parsed.String(), "/"), nil
 }
 
 func NormalizeRoot(root string) string {
@@ -611,13 +771,17 @@ func NewBrowser(root string, stripPrefix string) http.Handler {
 }
 
 func NewBrowserWithOptions(root string, stripPrefix string, options BrowserOptions) http.Handler {
+	filesystemPath := filesystemRoot(root)
+	browseURL, _ := NormalizeBrowseURL(options.BrowseURL)
 	return &Browser{
-		root:           filesystemRoot(root),
+		root:           filesystemPath,
 		stripPrefix:    normalizeStripPrefix(stripPrefix),
+		browseURL:      browseURL,
 		allowBrowse:    options.AllowBrowse,
 		browsePassword: strings.TrimSpace(options.BrowsePassword),
 		allowUpload:    options.AllowUpload,
 		uploadPassword: strings.TrimSpace(options.UploadPassword),
+		uploads:        newUploadManager(filesystemPath),
 	}
 }
 
@@ -755,6 +919,10 @@ func (b *Browser) handlePost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		redirectToDirectoryNotice(w, r, "upload")
+	case "upload_status":
+		b.handleUploadStatus(w, r, dirPath)
+	case "upload_chunk":
+		b.handleUploadChunk(w, r, dirPath)
 	case "delete":
 		if !b.handleDelete(w, r, dirPath) {
 			return
@@ -836,7 +1004,7 @@ func (b *Browser) handleMkdir(w http.ResponseWriter, r *http.Request, dirPath st
 		return false
 	}
 	name, ok := safeEntryName(r.FormValue("name"))
-	if !ok {
+	if !ok || isUploadStateEntry(name) {
 		http.Error(w, "invalid directory name", http.StatusBadRequest)
 		return false
 	}
@@ -862,7 +1030,7 @@ func (b *Browser) handleUpload(w http.ResponseWriter, r *http.Request, dirPath s
 	}
 	for _, header := range files {
 		name, ok := safeEntryName(filepath.Base(header.Filename))
-		if !ok {
+		if !ok || isUploadStateEntry(name) {
 			http.Error(w, "invalid file name", http.StatusBadRequest)
 			return false
 		}
@@ -880,7 +1048,7 @@ func (b *Browser) handleDelete(w http.ResponseWriter, r *http.Request, dirPath s
 		return false
 	}
 	name, ok := safeEntryName(r.FormValue("name"))
-	if !ok {
+	if !ok || isUploadStateEntry(name) {
 		http.Error(w, "invalid file name", http.StatusBadRequest)
 		return false
 	}
@@ -933,6 +1101,9 @@ func (b *Browser) stripRequestPath(w http.ResponseWriter, r *http.Request) (stri
 
 func (b *Browser) resolve(requestPath string) (string, string, bool) {
 	cleanPath := path.Clean("/" + requestPath)
+	if isUploadStatePath(cleanPath) {
+		return "", cleanPath, false
+	}
 	if cleanPath == "/" {
 		return b.root, cleanPath, true
 	}
@@ -1025,6 +1196,11 @@ func safeEntryName(name string) (string, bool) {
 	if strings.ContainsAny(name, `/\`) {
 		return "", false
 	}
+	for _, character := range name {
+		if character < 0x20 || character == 0x7f {
+			return "", false
+		}
+	}
 	return name, true
 }
 
@@ -1064,6 +1240,15 @@ func (b *Browser) renderDirectory(w http.ResponseWriter, r *http.Request, dirPat
 		http.Error(w, "cannot read directory", http.StatusInternalServerError)
 		return
 	}
+	if filepath.Clean(dirPath) == filepath.Clean(b.root) {
+		visibleEntries := entries[:0]
+		for _, entry := range entries {
+			if !isUploadStateEntry(entry.Name()) {
+				visibleEntries = append(visibleEntries, entry)
+			}
+		}
+		entries = visibleEntries
+	}
 	sort.Slice(entries, func(i, j int) bool {
 		if entries[i].IsDir() != entries[j].IsDir() {
 			return entries[i].IsDir()
@@ -1080,23 +1265,17 @@ func (b *Browser) renderDirectory(w http.ResponseWriter, r *http.Request, dirPat
 	fmt.Fprintf(w, "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><link rel=\"icon\" href=\"data:,\"><title>文件浏览 %s</title>", html.EscapeString(cleanPath))
 	fmt.Fprintf(w, "<style>%s</style>", directoryPageStyle)
 	fmt.Fprint(w, "</head><body><main class=\"page\"><header class=\"header\"><h1>文件浏览</h1><div class=\"path-row\">")
-	renderBreadcrumbs(w, cleanPath)
+	renderBreadcrumbs(w, cleanPath, b.browseURL)
 	fmt.Fprint(w, "</div>")
 	b.renderHeaderActions(w, r, canManage)
 	fmt.Fprint(w, "</header>")
 	renderNotice(w, r)
 	b.renderUploadPanel(w, canManage)
-	fmt.Fprint(w, "<section class=\"table-wrap\"><table><thead><tr><th class=\"name\">名称</th><th>大小</th><th>修改时间</th>")
-	if canManage {
-		fmt.Fprint(w, "<th class=\"ops\">操作</th>")
-	}
-	fmt.Fprint(w, "</tr></thead><tbody>")
+	fmt.Fprint(w, "<section class=\"table-wrap\"><table><thead><tr><th class=\"name\">名称</th><th>大小</th><th>修改时间</th><th class=\"ops\">操作</th></tr></thead><tbody>")
 
 	if cleanPath != "/" {
 		fmt.Fprint(w, "<tr><td><a class=\"entry-link\" href=\"../\"><span class=\"kind\">上级</span><span class=\"entry-name\">../</span></a></td><td class=\"muted\">-</td><td class=\"muted\">-</td>")
-		if canManage {
-			fmt.Fprint(w, "<td class=\"muted\">-</td>")
-		}
+		fmt.Fprint(w, "<td class=\"muted\">-</td>")
 		fmt.Fprint(w, "</tr>")
 	}
 
@@ -1126,27 +1305,36 @@ func (b *Browser) renderDirectory(w http.ResponseWriter, r *http.Request, dirPat
 			html.EscapeString(size),
 			html.EscapeString(info.ModTime().Format("2006-01-02 15:04:05")),
 		)
+		fmt.Fprint(w, "<td><div class=\"entry-actions\">")
+		if !entry.IsDir() {
+			copyURL := href
+			if b.browseURL != "" {
+				copyURL = joinBrowseURL(b.browseURL, cleanPath, name)
+			}
+			fmt.Fprintf(w, "<button class=\"btn copy\" type=\"button\" data-copy-url=\"%s\">链接</button>", html.EscapeString(copyURL))
+		}
 		if canManage {
-			fmt.Fprintf(w, "<td><form class=\"delete-form\" method=\"post\" action=\"?action=delete\"><input type=\"hidden\" name=\"name\" value=\"%s\"><button class=\"btn danger\" type=\"button\" data-confirm-delete data-entry-name=\"%s\">删除</button></form></td>",
+			fmt.Fprintf(w, "<form class=\"delete-form\" method=\"post\" action=\"?action=delete\"><input type=\"hidden\" name=\"name\" value=\"%s\"><button class=\"btn danger\" type=\"button\" data-confirm-delete data-entry-name=\"%s\">删除</button></form>",
 				html.EscapeString(name),
 				html.EscapeString(name),
 			)
 		}
+		if entry.IsDir() && !canManage {
+			fmt.Fprint(w, "<span class=\"muted\">-</span>")
+		}
+		fmt.Fprint(w, "</div></td>")
 		fmt.Fprint(w, "</tr>")
 	}
 
 	if len(entries) == 0 {
-		colspan := 3
-		if canManage {
-			colspan = 4
-		}
-		fmt.Fprintf(w, "<tr><td class=\"empty\" colspan=\"%d\">当前目录为空</td></tr>", colspan)
+		fmt.Fprint(w, "<tr><td class=\"empty\" colspan=\"4\">当前目录为空</td></tr>")
 	}
 
 	fmt.Fprint(w, "</tbody></table></section>")
 	if canManage {
 		renderManagementModals(w)
 	}
+	renderCopyTools(w)
 	fmt.Fprint(w, "</main></body></html>")
 }
 
@@ -1194,9 +1382,12 @@ func noticeMessage(notice string) string {
 	}
 }
 
-func renderBreadcrumbs(w http.ResponseWriter, cleanPath string) {
+func renderBreadcrumbs(w http.ResponseWriter, cleanPath string, browseURL string) {
 	segments := pathSegments(cleanPath)
 	fmt.Fprint(w, "<nav class=\"path\" aria-label=\"当前位置\">")
+	if browseURL != "" {
+		fmt.Fprintf(w, "<span class=\"browse-base\">%s</span>", html.EscapeString(browseURL))
+	}
 	if len(segments) == 0 {
 		fmt.Fprint(w, "<span class=\"crumb root current\">/</span>")
 		fmt.Fprint(w, "</nav>")
@@ -1225,6 +1416,30 @@ func pathSegments(cleanPath string) []string {
 		return nil
 	}
 	return strings.Split(strings.Trim(cleanPath, "/"), "/")
+}
+
+func joinBrowseURL(baseURL string, cleanPath string, entryName string) string {
+	segments := pathSegments(cleanPath)
+	if entryName != "" {
+		segments = append(segments, entryName)
+	}
+	encoded := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		encoded = append(encoded, escapeBrowseSegment(segment))
+	}
+	return strings.TrimRight(baseURL, "/") + "/" + strings.Join(encoded, "/")
+}
+
+func escapeBrowseSegment(segment string) string {
+	var escaped strings.Builder
+	for _, character := range segment {
+		if character > 127 {
+			escaped.WriteRune(character)
+			continue
+		}
+		escaped.WriteString(url.PathEscape(string(character)))
+	}
+	return escaped.String()
 }
 
 func (b *Browser) renderHeaderActions(w http.ResponseWriter, r *http.Request, canManage bool) {
@@ -1260,9 +1475,362 @@ func (b *Browser) renderUploadPanel(w http.ResponseWriter, canManage bool) {
 	fmt.Fprint(w, "<section class=\"panel\"><div class=\"panel-head\"><div><div class=\"panel-title\">上传维护</div><div class=\"panel-subtitle\">管理当前目录</div></div>")
 	fmt.Fprint(w, "<form class=\"logout-form\" method=\"post\" action=\"?action=logout\"><button class=\"btn secondary\" type=\"submit\">退出登录</button></form></div>")
 	fmt.Fprint(w, "<div class=\"panel-actions\">")
-	fmt.Fprint(w, "<form class=\"inline-form action-form\" method=\"post\" action=\"?action=upload\" enctype=\"multipart/form-data\"><div class=\"field\"><label>上传文件</label><input type=\"file\" name=\"files\" multiple required></div><button class=\"btn\" type=\"submit\">上传</button></form>")
+	fmt.Fprint(w, `<form class="action-form upload-form" data-upload-form method="post" action="?action=upload" enctype="multipart/form-data">
+<p class="resume-hint" data-resume-hint hidden></p>
+<div class="upload-pick-row">
+<div class="field"><label>选择文件 · 支持分片上传与断点续传</label><input type="file" name="files" multiple required data-upload-input></div>
+<button class="btn" type="submit" data-upload-start>开始上传</button>
+<button class="btn secondary" type="button" data-upload-pause hidden>暂停</button>
+</div>
+<div class="transfer-console" data-upload-console hidden>
+<div class="transfer-head"><span class="transfer-title" data-upload-title>准备传输</span><span class="transfer-percent" data-upload-percent>0%</span></div>
+<div class="progress-track" role="progressbar" aria-label="总上传进度" aria-valuemin="0" aria-valuemax="100" data-upload-overall><div class="progress-value" data-upload-overall-value></div></div>
+<div class="transfer-stats"><span data-upload-bytes>0 B / 0 B</span><span data-upload-speed>0 B/s</span><span data-upload-eta>剩余时间 --</span></div>
+<div class="transfer-jobs" data-upload-jobs></div>
+</div>
+</form>`)
 	fmt.Fprint(w, "<div class=\"inline-form action-form side-action\"><button class=\"btn secondary\" type=\"button\" data-open-mkdir>新建文件夹</button></div>")
 	fmt.Fprint(w, "</div></section>")
+	renderUploadScript(w)
+}
+
+func renderUploadScript(w http.ResponseWriter) {
+	fmt.Fprint(w, `<script>
+(function () {
+  var form = document.querySelector('[data-upload-form]');
+  if (!form || !window.XMLHttpRequest || !window.Promise || !window.URL) return;
+  var input = form.querySelector('[data-upload-input]');
+  var startButton = form.querySelector('[data-upload-start]');
+  var pauseButton = form.querySelector('[data-upload-pause]');
+  var consoleBox = form.querySelector('[data-upload-console]');
+  var resumeHint = form.querySelector('[data-resume-hint]');
+  var title = form.querySelector('[data-upload-title]');
+  var percent = form.querySelector('[data-upload-percent]');
+  var overall = form.querySelector('[data-upload-overall]');
+  var overallValue = form.querySelector('[data-upload-overall-value]');
+  var bytesText = form.querySelector('[data-upload-bytes]');
+  var speedText = form.querySelector('[data-upload-speed]');
+  var etaText = form.querySelector('[data-upload-eta]');
+  var jobsBox = form.querySelector('[data-upload-jobs]');
+  var chunkSize = 8 * 1024 * 1024;
+  var maxRetries = 5;
+  var jobs = [];
+  var running = false;
+  var paused = false;
+  var activeRequest = null;
+  var activeLoaded = 0;
+  var runStartedAt = 0;
+  var storageKey = 'nps-file-upload:' + window.location.origin + window.location.pathname;
+
+  function formatBytes(value) {
+    if (!isFinite(value) || value <= 0) return '0 B';
+    var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+    var number = value / Math.pow(1024, index);
+    return (index === 0 ? Math.round(number) : number.toFixed(number >= 100 ? 0 : number >= 10 ? 1 : 2)) + ' ' + units[index];
+  }
+
+  function formatDuration(seconds) {
+    if (!isFinite(seconds) || seconds < 0) return '--';
+    if (seconds < 60) return Math.max(1, Math.ceil(seconds)) + ' 秒';
+    if (seconds < 3600) return Math.ceil(seconds / 60) + ' 分钟';
+    return (seconds / 3600).toFixed(1) + ' 小时';
+  }
+
+  function uploadID(file) {
+    var value = file.name + '\u0000' + file.size + '\u0000' + file.lastModified;
+    var seeds = [2166136261, 2246822507, 3266489909, 668265263];
+    return seeds.map(function (seed) {
+      var hash = seed >>> 0;
+      for (var index = 0; index < value.length; index++) {
+        hash ^= value.charCodeAt(index);
+        hash = Math.imul(hash, 16777619) >>> 0;
+      }
+      return ('00000000' + hash.toString(16)).slice(-8);
+    }).join('');
+  }
+
+  function endpoint(action, job, offset) {
+    var target = new URL(window.location.href);
+    target.search = '';
+    target.hash = '';
+    target.searchParams.set('action', action);
+    target.searchParams.set('upload_id', job.id);
+    target.searchParams.set('name', job.file.name);
+    target.searchParams.set('size', String(job.file.size));
+    target.searchParams.set('last_modified', String(job.file.lastModified || 0));
+    if (typeof offset === 'number') target.searchParams.set('offset', String(offset));
+    return target.toString();
+  }
+
+  function request(action, job, offset, body, onProgress) {
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      activeRequest = xhr;
+      xhr.open('POST', endpoint(action, job, offset), true);
+      xhr.setRequestHeader('Accept', 'application/json');
+      if (body) xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+      if (xhr.upload && onProgress) {
+        xhr.upload.onprogress = function (event) {
+          if (event.lengthComputable) onProgress(event.loaded);
+        };
+      }
+      xhr.onload = function () {
+        activeRequest = null;
+        var payload = {};
+        try { payload = JSON.parse(xhr.responseText || '{}'); } catch (error) { payload = {}; }
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(payload);
+          return;
+        }
+        var failure = new Error(payload.error || ('上传请求失败，HTTP ' + xhr.status));
+        failure.status = xhr.status;
+        if (typeof payload.offset === 'number') failure.offset = payload.offset;
+        reject(failure);
+      };
+      xhr.onerror = function () {
+        activeRequest = null;
+        reject(new Error('网络连接中断'));
+      };
+      xhr.onabort = function () {
+        activeRequest = null;
+        var error = new Error('上传已暂停');
+        error.paused = true;
+        reject(error);
+      };
+      xhr.send(body || null);
+    });
+  }
+
+  function sleep(milliseconds) {
+    return new Promise(function (resolve) { window.setTimeout(resolve, milliseconds); });
+  }
+
+  function createJob(file) {
+    var row = document.createElement('div');
+    row.className = 'transfer-job';
+    var head = document.createElement('div');
+    head.className = 'transfer-job-head';
+    var name = document.createElement('span');
+    name.className = 'transfer-job-name';
+    name.textContent = file.name;
+    var state = document.createElement('span');
+    state.className = 'transfer-job-state';
+    state.textContent = '等待上传';
+    var track = document.createElement('div');
+    track.className = 'progress-track';
+    var value = document.createElement('div');
+    value.className = 'progress-value';
+    track.appendChild(value);
+    head.appendChild(name);
+    head.appendChild(state);
+    row.appendChild(head);
+    row.appendChild(track);
+    jobsBox.appendChild(row);
+    return { file: file, id: uploadID(file), offset: 0, initialOffset: 0, statusLoaded: false, complete: false, row: row, state: state, value: value };
+  }
+
+  function rebuildJobs() {
+    jobs = [];
+    jobsBox.innerHTML = '';
+    Array.prototype.forEach.call(input.files || [], function (file) { jobs.push(createJob(file)); });
+    consoleBox.hidden = jobs.length === 0;
+    activeLoaded = 0;
+    updateOverall();
+  }
+
+  function updateJob(job, inFlight, label) {
+    var current = Math.min(job.file.size, job.offset + (inFlight || 0));
+    var jobPercent = job.file.size === 0 ? (job.complete ? 100 : 0) : current / job.file.size * 100;
+    job.value.style.width = Math.max(0, Math.min(100, jobPercent)).toFixed(2) + '%';
+    if (label) job.state.textContent = label;
+  }
+
+  function updateOverall(activeJob) {
+    var total = jobs.reduce(function (sum, job) { return sum + job.file.size; }, 0);
+    var uploaded = jobs.reduce(function (sum, job) { return sum + Math.min(job.offset, job.file.size); }, 0);
+    if (activeJob) uploaded += Math.min(activeLoaded, Math.max(0, activeJob.file.size - activeJob.offset));
+    var ratio = total === 0 ? (jobs.length && jobs.every(function (job) { return job.complete; }) ? 1 : 0) : uploaded / total;
+    var value = Math.max(0, Math.min(100, ratio * 100));
+    overallValue.style.width = value.toFixed(2) + '%';
+    overall.setAttribute('aria-valuenow', String(Math.round(value)));
+    percent.textContent = Math.round(value) + '%';
+    bytesText.textContent = formatBytes(uploaded) + ' / ' + formatBytes(total);
+    var effective = jobs.reduce(function (sum, job) {
+      return sum + Math.max(0, job.offset - job.initialOffset);
+    }, 0) + (activeJob ? activeLoaded : 0);
+    var elapsed = runStartedAt ? Math.max(0.25, (Date.now() - runStartedAt) / 1000) : 0;
+    var speed = elapsed ? effective / elapsed : 0;
+    speedText.textContent = formatBytes(speed) + '/s';
+    etaText.textContent = '剩余时间 ' + (speed > 0 ? formatDuration((total - uploaded) / speed) : '--');
+  }
+
+  function loadPending() {
+    if (!window.localStorage) return [];
+    try {
+      var pending = JSON.parse(window.localStorage.getItem(storageKey) || '[]');
+      var cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      pending = pending.filter(function (item) { return item.updatedAt >= cutoff; });
+      window.localStorage.setItem(storageKey, JSON.stringify(pending));
+      return pending;
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function savePending() {
+    if (!window.localStorage) return;
+    if (!jobs.length) return;
+    var pending = jobs.filter(function (job) { return !job.complete; }).map(function (job) {
+      return { name: job.file.name, size: job.file.size, lastModified: job.file.lastModified || 0, offset: job.offset, updatedAt: Date.now() };
+    });
+    try {
+      if (pending.length) window.localStorage.setItem(storageKey, JSON.stringify(pending));
+      else window.localStorage.removeItem(storageKey);
+    } catch (error) {}
+  }
+
+  function showPendingHint() {
+    var pending = loadPending();
+    if (!pending.length) return;
+    resumeHint.textContent = '检测到 ' + pending.length + ' 个未完成上传；重新选择同一文件后，将从服务端已保存的分片继续。';
+    resumeHint.hidden = false;
+  }
+
+  async function sendChunk(job, blob) {
+    for (var attempt = 0; attempt < maxRetries; attempt++) {
+      if (paused) {
+        var pausedError = new Error('上传已暂停');
+        pausedError.paused = true;
+        throw pausedError;
+      }
+      try {
+        return await request('upload_chunk', job, job.offset, blob, function (loaded) {
+          activeLoaded = loaded;
+          updateJob(job, loaded, '上传中 ' + formatBytes(job.offset + loaded) + ' / ' + formatBytes(job.file.size));
+          updateOverall(job);
+        });
+      } catch (error) {
+        activeLoaded = 0;
+        updateOverall();
+        if (error.paused) throw error;
+        if (error.status === 409 && typeof error.offset === 'number') {
+          return { offset: error.offset, complete: error.offset === job.file.size };
+        }
+        if (attempt === maxRetries - 1) throw error;
+        var wait = Math.min(10000, Math.pow(2, attempt) * 1000);
+        updateJob(job, 0, '网络异常，' + Math.ceil(wait / 1000) + ' 秒后重试 ' + (attempt + 2) + '/' + maxRetries);
+        await sleep(wait);
+      }
+    }
+  }
+
+  async function fetchStatus(job) {
+    for (var attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        return await request('upload_status', job, null, null, null);
+      } catch (error) {
+        if (error.paused || (error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429)) throw error;
+        if (attempt === maxRetries - 1) throw error;
+        var wait = Math.min(10000, Math.pow(2, attempt) * 1000);
+        updateJob(job, 0, '状态查询失败，' + Math.ceil(wait / 1000) + ' 秒后重试');
+        await sleep(wait);
+      }
+    }
+  }
+
+  async function uploadJob(job) {
+    updateJob(job, 0, '检查断点');
+    var status = await fetchStatus(job);
+    job.offset = Math.max(0, Math.min(job.file.size, Number(status.offset) || 0));
+    job.initialOffset = job.offset;
+    job.statusLoaded = true;
+    job.complete = Boolean(status.complete);
+    activeLoaded = 0;
+    if (job.complete) {
+      updateJob(job, 0, '已存在 · 完成');
+      updateOverall();
+      savePending();
+      return;
+    }
+    if (job.offset > 0) updateJob(job, 0, '从 ' + formatBytes(job.offset) + ' 继续');
+    while (job.offset < job.file.size) {
+      var end = Math.min(job.file.size, job.offset + chunkSize);
+      var response = await sendChunk(job, job.file.slice(job.offset, end));
+      job.offset = Math.max(0, Math.min(job.file.size, Number(response.offset) || 0));
+      job.complete = Boolean(response.complete) || job.offset === job.file.size;
+      activeLoaded = 0;
+      updateJob(job, 0, job.complete ? '上传完成' : '已保存 ' + formatBytes(job.offset));
+      updateOverall();
+      savePending();
+    }
+    if (job.file.size === 0) {
+      job.complete = true;
+      updateJob(job, 0, '上传完成');
+    }
+  }
+
+  async function runUploads() {
+    if (running || !jobs.length) return;
+    running = true;
+    paused = false;
+    runStartedAt = Date.now();
+    input.disabled = true;
+    startButton.disabled = true;
+    startButton.textContent = '上传中';
+    pauseButton.hidden = false;
+    title.textContent = '分片传输中 · 每片 8 MB';
+    try {
+      for (var index = 0; index < jobs.length; index++) {
+        if (!jobs[index].complete) await uploadJob(jobs[index]);
+      }
+      title.textContent = '全部上传完成';
+      percent.textContent = '100%';
+      overallValue.style.width = '100%';
+      savePending();
+      window.setTimeout(function () {
+        var target = new URL(window.location.href);
+        target.search = '';
+        target.searchParams.set('notice', 'upload');
+        window.location.href = target.toString();
+      }, 650);
+    } catch (error) {
+      if (error.paused || paused) {
+        title.textContent = '上传已暂停 · 可继续';
+      } else {
+        title.textContent = '上传中断 · ' + error.message;
+      }
+      savePending();
+    } finally {
+      running = false;
+      activeLoaded = 0;
+      input.disabled = false;
+      startButton.disabled = false;
+      startButton.textContent = jobs.some(function (job) { return !job.complete; }) ? '继续上传' : '上传完成';
+      pauseButton.hidden = true;
+      updateOverall();
+    }
+  }
+
+  input.addEventListener('change', function () {
+    if (running) return;
+    rebuildJobs();
+    resumeHint.hidden = true;
+    startButton.textContent = '开始上传';
+  });
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    if (!jobs.length) rebuildJobs();
+    runUploads();
+  });
+  pauseButton.addEventListener('click', function () {
+    paused = true;
+    if (activeRequest) activeRequest.abort();
+  });
+  window.addEventListener('beforeunload', function () { savePending(); });
+  showPendingHint();
+})();
+</script>`)
 }
 
 func renderManagementModals(w http.ResponseWriter) {
@@ -1331,6 +1899,58 @@ func renderManagementModals(w http.ResponseWriter) {
   document.addEventListener('keydown', function (event) {
     if (event.key !== 'Escape') return;
     document.querySelectorAll('.modal-backdrop:not([hidden])').forEach(closeModal);
+  });
+})();
+</script>`)
+}
+
+func renderCopyTools(w http.ResponseWriter) {
+	fmt.Fprint(w, `<div class="copy-toast" role="status" aria-live="polite" data-copy-toast hidden></div>
+<script>
+(function () {
+  var toast = document.querySelector('[data-copy-toast]');
+  var toastTimer = null;
+  function showToast(message) {
+    if (!toast) return;
+    toast.textContent = message;
+    toast.hidden = false;
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(function () { toast.hidden = true; }, 1800);
+  }
+  function fallbackCopy(value) {
+    var input = document.createElement('textarea');
+    input.value = value;
+    input.setAttribute('readonly', 'readonly');
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    document.body.appendChild(input);
+    input.select();
+    var copied = false;
+    try { copied = document.execCommand('copy'); } catch (error) { copied = false; }
+    document.body.removeChild(input);
+    if (!copied) window.prompt('请复制文件地址', value);
+    return copied;
+  }
+  document.querySelectorAll('[data-copy-url]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var configured = button.getAttribute('data-copy-url') || '';
+      var value = /^https?:\/\//i.test(configured) ? configured : new URL(configured, window.location.href).href;
+      var original = button.textContent;
+      function done() {
+        button.textContent = '已复制';
+        showToast('文件地址已复制');
+        window.setTimeout(function () { button.textContent = original; }, 1500);
+      }
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(value).then(done, function () {
+          fallbackCopy(value);
+          done();
+        });
+      } else {
+        fallbackCopy(value);
+        done();
+      }
+    });
   });
 })();
 </script>`)

@@ -257,6 +257,8 @@ func dealTunnel(s string) *file.Tunnel {
 			t.LocalPath = item[1]
 		case "strip_pre":
 			t.StripPre = item[1]
+		case "browse_url":
+			t.BrowseURL = item[1]
 		case "allow_browse":
 			t.AllowBrowse = common.GetBoolByStr(item[1])
 		case "browse_password":

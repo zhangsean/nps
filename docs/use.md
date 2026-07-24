@@ -211,6 +211,7 @@ mode=file
 server_port=9100
 local_path=/files
 strip_pre=/web/
+browse_url=https://files.example.com/download
 allow_browse=false
 browse_password=
 allow_upload=false
@@ -223,6 +224,7 @@ mode | file
 server_port | 服务端开启的端口
 local_path|本地文件目录，留空时默认为 `/files`
 strip_pre|前缀
+browse_url|对外浏览地址；用于路径展示和复制文件完整链接，留空时复制当前页面地址
 allow_browse|是否启用浏览认证，默认 `false`
 browse_password|浏览密码，`allow_browse=true` 时必须配置
 allow_upload|是否启用管理，默认 `false`
@@ -233,6 +235,10 @@ upload_password|管理密码，`allow_upload=true` 时必须配置
 开启 `allow_browse=true` 并配置 `browse_password` 后，访问目录列表和直接下载文件都必须先输入浏览密码。若同时启用管理，输入管理密码可直接获得浏览和管理权限。
 
 开启 `allow_upload=true` 并配置 `upload_password` 后，目录页面会显示管理登录入口。输入管理密码后，可在当前目录创建文件夹、上传文件、删除文件或文件夹。
+
+配置 `browse_url` 后，文件浏览页面会在当前位置前展示该地址，并为每个文件提供“链接”按钮。复制出的链接保留中文路径原文，空格和 URL 保留字符仍会自动编码。地址必须是 `http://` 或 `https://` 绝对地址，不能包含账号密码、查询参数或锚点；未配置时使用浏览器当前访问地址。
+
+文件上传按 8 MB 分片提交，页面展示文件及总进度、实时速度和预计剩余时间。单片失败会自动重试，暂停、网络中断或页面刷新后，重新选择名称、大小和修改时间相同的文件即可从服务端已保存的偏移继续；超过 7 天的未完成分片会自动清理。完成的分片通过同文件系统重命名快速落入目标目录，避免大文件在单个长请求中等待并降低反向代理 504 的概率。
 
 #### 断线重连
 ```ini

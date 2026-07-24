@@ -38,6 +38,7 @@ func (s *LocalFileServer) Start() error {
 	s.listener = listener
 	s.server = &http.Server{
 		Handler: fileserver.NewBrowserWithOptions(s.task.LocalPath, s.task.StripPre, fileserver.BrowserOptions{
+			BrowseURL:      s.task.BrowseURL,
 			AllowBrowse:    s.task.AllowBrowse,
 			BrowsePassword: s.task.BrowsePass,
 			AllowUpload:    s.task.AllowUpload,
