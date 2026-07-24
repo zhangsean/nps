@@ -15,7 +15,7 @@
     <link href="{{.web_base_url}}/static/css/solid.min.css" rel="stylesheet">
     <link href="{{.web_base_url}}/static/css/bootstrap.min.css" rel="stylesheet">
     <link href="{{.web_base_url}}/static/css/bootstrap-table.min.css" rel="stylesheet">
-    <link href="{{.web_base_url}}/static/css/style.css?v=20260707b" rel="stylesheet">
+    <link href="{{.web_base_url}}/static/css/style.css?v=20260724a" rel="stylesheet">
 
     <!-- Latest compiled and minified JavaScript -->
     <script src="{{.web_base_url}}/static/js/jquery-3.4.1.min.js"></script>
@@ -31,7 +31,7 @@
 
 </head>
 
-<body class="pace-done fixed-nav fixed-nav-basic">
+<body class="pace-done fixed-nav fixed-nav-basic app-shell {{.bodyClass}}">
 <div id="wrapper">
     <nav class="navbar-default navbar-static-side" role="navigation">
         <div class="sidebar-collapse">
@@ -92,10 +92,12 @@
                     <span class="nav-label" langtag="scheme-file"></span></a>
                 </li>
 
+                {{if eq true .isAdmin}}
                 <li class="{{if eq "global" .menu}}active{{end}}">
                 <a href="{{.web_base_url}}/global/index"><i class="fa fa-cog fa-lg"></i>
                     <span class="nav-label" langtag="word-globalparam"></span></a>
                 </li>
+                {{end}}
 
                 <li class="{{if eq "help" .menu}}active{{end}}">
                     <a href="https://github.com/zhangsean/nps" target="_blank"><i class="fa fa-lightbulb fa-lg"></i>

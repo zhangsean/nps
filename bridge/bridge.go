@@ -68,9 +68,18 @@ type Bridge struct {
 	targetConnectTimeout       time.Duration
 	targetConnectRetryCount    int
 	targetConnectRetryInterval time.Duration
+	runtimeConfigMu            sync.RWMutex
 }
 
-func NewTunnel(tunnelPort int, tunnelType string, ipVerify bool, runList *sync.Map, disconnectTime int, clientConnectTimeoutSeconds int, targetConnectTimeoutSeconds int, targetConnectRetryCount int, targetConnectRetryIntervalMs int) *Bridge {
+type RuntimeConfig struct {
+	DisconnectTime             int
+	ClientConnectTimeout       time.Duration
+	TargetConnectTimeout       time.Duration
+	TargetConnectRetryCount    int
+	TargetConnectRetryInterval time.Duration
+}
+
+func normalizeRuntimeConfig(disconnectTime int, clientConnectTimeoutSeconds int, targetConnectTimeoutSeconds int, targetConnectRetryCount int, targetConnectRetryIntervalMs int) RuntimeConfig {
 	clientConnectTimeout := time.Duration(clientConnectTimeoutSeconds) * time.Second
 	if clientConnectTimeout <= 0 {
 		clientConnectTimeout = defaultClientConnectTimeout
@@ -86,6 +95,20 @@ func NewTunnel(tunnelPort int, tunnelType string, ipVerify bool, runList *sync.M
 	if targetConnectRetryInterval < 0 {
 		targetConnectRetryInterval = 0
 	}
+	if disconnectTime <= 0 {
+		disconnectTime = 60
+	}
+	return RuntimeConfig{
+		DisconnectTime:             disconnectTime,
+		ClientConnectTimeout:       clientConnectTimeout,
+		TargetConnectTimeout:       targetConnectTimeout,
+		TargetConnectRetryCount:    targetConnectRetryCount,
+		TargetConnectRetryInterval: targetConnectRetryInterval,
+	}
+}
+
+func NewTunnel(tunnelPort int, tunnelType string, ipVerify bool, runList *sync.Map, disconnectTime int, clientConnectTimeoutSeconds int, targetConnectTimeoutSeconds int, targetConnectRetryCount int, targetConnectRetryIntervalMs int) *Bridge {
+	runtimeConfig := normalizeRuntimeConfig(disconnectTime, clientConnectTimeoutSeconds, targetConnectTimeoutSeconds, targetConnectRetryCount, targetConnectRetryIntervalMs)
 	return &Bridge{
 		TunnelPort:                 tunnelPort,
 		tunnelType:                 tunnelType,
@@ -95,26 +118,51 @@ func NewTunnel(tunnelPort int, tunnelType string, ipVerify bool, runList *sync.M
 		SecretChan:                 make(chan *conn.Secret),
 		ipVerify:                   ipVerify,
 		runList:                    runList,
-		disconnectTime:             disconnectTime,
-		clientConnectTimeout:       clientConnectTimeout,
-		targetConnectTimeout:       targetConnectTimeout,
-		targetConnectRetryCount:    targetConnectRetryCount,
-		targetConnectRetryInterval: targetConnectRetryInterval,
+		disconnectTime:             runtimeConfig.DisconnectTime,
+		clientConnectTimeout:       runtimeConfig.ClientConnectTimeout,
+		targetConnectTimeout:       runtimeConfig.TargetConnectTimeout,
+		targetConnectRetryCount:    runtimeConfig.TargetConnectRetryCount,
+		targetConnectRetryInterval: runtimeConfig.TargetConnectRetryInterval,
 	}
+}
+
+func (s *Bridge) UpdateRuntimeConfig(disconnectTime int, clientConnectTimeoutSeconds int, targetConnectTimeoutSeconds int, targetConnectRetryCount int, targetConnectRetryIntervalMs int) RuntimeConfig {
+	runtimeConfig := normalizeRuntimeConfig(disconnectTime, clientConnectTimeoutSeconds, targetConnectTimeoutSeconds, targetConnectRetryCount, targetConnectRetryIntervalMs)
+	if s == nil {
+		return runtimeConfig
+	}
+	s.runtimeConfigMu.Lock()
+	s.disconnectTime = runtimeConfig.DisconnectTime
+	s.clientConnectTimeout = runtimeConfig.ClientConnectTimeout
+	s.targetConnectTimeout = runtimeConfig.TargetConnectTimeout
+	s.targetConnectRetryCount = runtimeConfig.TargetConnectRetryCount
+	s.targetConnectRetryInterval = runtimeConfig.TargetConnectRetryInterval
+	s.runtimeConfigMu.Unlock()
+	return runtimeConfig
+}
+
+func (s *Bridge) RuntimeConfig() RuntimeConfig {
+	if s == nil {
+		return RuntimeConfig{}
+	}
+	s.runtimeConfigMu.RLock()
+	runtimeConfig := RuntimeConfig{
+		DisconnectTime:             s.disconnectTime,
+		ClientConnectTimeout:       s.clientConnectTimeout,
+		TargetConnectTimeout:       s.targetConnectTimeout,
+		TargetConnectRetryCount:    s.targetConnectRetryCount,
+		TargetConnectRetryInterval: s.targetConnectRetryInterval,
+	}
+	s.runtimeConfigMu.RUnlock()
+	return runtimeConfig
 }
 
 func (s *Bridge) TargetConnectRetryCount() int {
-	if s == nil {
-		return 0
-	}
-	return s.targetConnectRetryCount
+	return s.RuntimeConfig().TargetConnectRetryCount
 }
 
 func (s *Bridge) TargetConnectRetryInterval() time.Duration {
-	if s == nil {
-		return 0
-	}
-	return s.targetConnectRetryInterval
+	return s.RuntimeConfig().TargetConnectRetryInterval
 }
 
 func (s *Bridge) StartTunnel() error {
@@ -336,7 +384,7 @@ func (s *Bridge) typeDeal(typeVal string, c *conn.Conn, id int, vs string) {
 		go s.GetHealthFromClient(id, c)
 		logs.Info("clientId %d connection succeeded, address:%s ", id, c.Conn.RemoteAddr())
 	case common.WORK_CHAN:
-		muxConn := nps_mux.NewMux(c.Conn, s.tunnelType, s.disconnectTime)
+		muxConn := nps_mux.NewMux(c.Conn, s.tunnelType, s.RuntimeConfig().DisconnectTime)
 		if v, ok := s.Client.LoadOrStore(id, NewClient(muxConn, nil, nil, vs)); ok {
 			v.(*Client).tunnel = muxConn
 		}
@@ -357,7 +405,7 @@ func (s *Bridge) typeDeal(typeVal string, c *conn.Conn, id int, vs string) {
 			logs.Error("secret error, failed to match the key successfully")
 		}
 	case common.WORK_FILE:
-		muxConn := nps_mux.NewMux(c.Conn, s.tunnelType, s.disconnectTime)
+		muxConn := nps_mux.NewMux(c.Conn, s.tunnelType, s.RuntimeConfig().DisconnectTime)
 		if v, ok := s.Client.LoadOrStore(id, NewClient(nil, muxConn, nil, vs)); ok {
 			v.(*Client).file = muxConn
 		}
@@ -398,6 +446,7 @@ func (s *Bridge) register(c *conn.Conn) {
 }
 
 func (s *Bridge) SendLinkInfo(clientId int, link *conn.Link, t *file.Tunnel) (target net.Conn, err error) {
+	runtimeConfig := s.RuntimeConfig()
 	//if the proxy type is local
 	if link.LocalProxy {
 		target, err = s.dialLocalProxyTargetsWithRetry(link.ConnType, linkTargetHosts(link), link.TargetConnectRetryHook)
@@ -425,7 +474,7 @@ func (s *Bridge) SendLinkInfo(clientId int, link *conn.Link, t *file.Tunnel) (ta
 			err = errors.New("the client connect error")
 			return
 		}
-		if target, err = tunnel.NewConnWithTimeout(s.clientConnectTimeout); err != nil {
+		if target, err = tunnel.NewConnWithTimeout(runtimeConfig.ClientConnectTimeout); err != nil {
 			return
 		}
 		if t != nil && t.Mode == "file" {
@@ -434,9 +483,9 @@ func (s *Bridge) SendLinkInfo(clientId int, link *conn.Link, t *file.Tunnel) (ta
 			link.Compress = false
 			return
 		}
-		link.Option.Timeout = s.targetConnectTimeout
-		link.Option.RetryCount = s.targetConnectRetryCount
-		link.Option.RetryInterval = s.targetConnectRetryInterval
+		link.Option.Timeout = runtimeConfig.TargetConnectTimeout
+		link.Option.RetryCount = runtimeConfig.TargetConnectRetryCount
+		link.Option.RetryInterval = runtimeConfig.TargetConnectRetryInterval
 		if _, err = conn.NewConn(target).SendInfo(link, ""); err != nil {
 			logs.Info("new connect error ,the target %s refuse to connect", link.Host)
 			return
@@ -457,13 +506,14 @@ func (s *Bridge) dialLocalProxyTargetsWithRetry(connType string, targetHosts []s
 	if len(targetHosts) == 0 {
 		return nil, net.InvalidAddrError("empty target host")
 	}
-	attempts := s.targetConnectRetryCount + 1
+	runtimeConfig := s.RuntimeConfig()
+	attempts := runtimeConfig.TargetConnectRetryCount + 1
 	if attempts < 1 {
 		attempts = 1
 	}
 	for attempt := 1; attempt <= attempts; attempt++ {
 		targetHost := targetHosts[(attempt-1)%len(targetHosts)]
-		target, err = net.DialTimeout(connType, targetHost, s.targetConnectTimeout)
+		target, err = net.DialTimeout(connType, targetHost, runtimeConfig.TargetConnectTimeout)
 		if err == nil {
 			if attempt > 1 {
 				logs.Info("local proxy target connect retry success, conn type %s, target %s, attempt %d/%d", connType, targetHost, attempt, attempts)
@@ -473,11 +523,11 @@ func (s *Bridge) dialLocalProxyTargetsWithRetry(connType string, targetHosts []s
 		if attempt == attempts {
 			return nil, err
 		}
-		delay := randomTargetConnectRetryDelay(s.targetConnectRetryInterval)
+		delay := randomTargetConnectRetryDelay(runtimeConfig.TargetConnectRetryInterval)
 		if delay > 0 {
-			logs.Warn("local proxy target connect failed, conn type %s, target %s, attempt %d/%d, timeout %s, retry after %s, error %s", connType, targetHost, attempt, attempts, s.targetConnectTimeout, delay, err.Error())
+			logs.Warn("local proxy target connect failed, conn type %s, target %s, attempt %d/%d, timeout %s, retry after %s, error %s", connType, targetHost, attempt, attempts, runtimeConfig.TargetConnectTimeout, delay, err.Error())
 		} else {
-			logs.Warn("local proxy target connect failed, conn type %s, target %s, attempt %d/%d, timeout %s, retry next, error %s", connType, targetHost, attempt, attempts, s.targetConnectTimeout, err.Error())
+			logs.Warn("local proxy target connect failed, conn type %s, target %s, attempt %d/%d, timeout %s, retry next, error %s", connType, targetHost, attempt, attempts, runtimeConfig.TargetConnectTimeout, err.Error())
 		}
 		if retryHook != nil {
 			retryHook(conn.RetryInfo{

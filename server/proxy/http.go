@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"ehang.io/nps/bridge"
@@ -38,7 +39,21 @@ type httpServer struct {
 	upstreamResponseTimeout time.Duration
 }
 
+var runtimeUpstreamResponseTimeoutNanos atomic.Int64
+
+func SetUpstreamResponseTimeout(timeout time.Duration) {
+	if timeout < 0 {
+		timeout = 0
+	}
+	runtimeUpstreamResponseTimeoutNanos.Store(int64(timeout))
+}
+
+func UpstreamResponseTimeout() time.Duration {
+	return time.Duration(runtimeUpstreamResponseTimeoutNanos.Load())
+}
+
 func NewHttp(bridge *bridge.Bridge, c *file.Tunnel, httpPort, httpsPort int, useCache bool, cacheLen int, addOrigin bool, upstreamResponseTimeout time.Duration) *httpServer {
+	SetUpstreamResponseTimeout(upstreamResponseTimeout)
 	httpServer := &httpServer{
 		BaseServer: BaseServer{
 			task:   c,
@@ -86,7 +101,7 @@ func (s *httpServer) Start() error {
 				logs.Error(err)
 				os.Exit(0)
 			}
-			logs.Error(NewHttpsServer(s.httpsListener, s.bridge, s.useCache, s.cacheLen, s.upstreamResponseTimeout).Start())
+			logs.Error(NewHttpsServer(s.httpsListener, s.bridge, s.useCache, s.cacheLen, UpstreamResponseTimeout()).Start())
 		}()
 	}
 	return nil
@@ -374,11 +389,12 @@ func (s *httpServer) proxyHTTPRequestOnce(c *conn.Conn, host *file.Host, r *http
 	accessLog.AddPhaseDuration(httpAccessLogPhaseRequestWrite, time.Since(requestWriteStart))
 
 	responseHeaderStart := time.Now()
-	if s.upstreamResponseTimeout > 0 {
-		_ = target.SetReadDeadline(time.Now().Add(s.upstreamResponseTimeout))
+	upstreamResponseTimeout := UpstreamResponseTimeout()
+	if upstreamResponseTimeout > 0 {
+		_ = target.SetReadDeadline(time.Now().Add(upstreamResponseTimeout))
 	}
 	resp, err := http.ReadResponse(bufio.NewReader(connClient), r)
-	if s.upstreamResponseTimeout > 0 {
+	if upstreamResponseTimeout > 0 {
 		_ = target.SetReadDeadline(time.Time{})
 	}
 	accessLog.AddPhaseDuration(httpAccessLogPhaseResponseHeader, time.Since(responseHeaderStart))

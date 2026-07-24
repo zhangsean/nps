@@ -1,47 +1,19 @@
 package controllers
 
-import (
-	"ehang.io/nps/lib/file"
-	"strings"
-)
-
 type GlobalController struct {
 	BaseController
 }
 
 func (s *GlobalController) Index() {
-	//if s.Ctx.Request.Method == "GET" {
-	//
-	//	return
-	//}
-	s.Data["menu"] = "global"
-	s.SetInfo("global")
-	s.display("global/index")
-
-	global := file.GetDb().GetGlobal()
-	if global == nil {
+	s.requireConfigAdmin(false)
+	s.Ctx.Output.Header("Cache-Control", "no-store")
+	if err := s.loadRuntimeConfigData(); err != nil {
+		s.Ctx.Output.SetStatus(500)
+		s.Ctx.WriteString("cannot read nps.conf: " + err.Error())
 		return
 	}
-	s.Data["globalBlackIpList"] = strings.Join(global.BlackIpList, "\r\n")
-}
-
-//添加全局黑名单IP
-func (s *GlobalController) Save() {
-	//global, err := file.GetDb().GetGlobal()
-	//if err != nil {
-	//	return
-	//}
-	if s.Ctx.Request.Method == "GET" {
-		s.Data["menu"] = "global"
-		s.SetInfo("save global")
-		s.display()
-	} else {
-
-		t := &file.Glob{BlackIpList: RemoveRepeatedElement(strings.Split(s.getEscapeString("globalBlackIpList"), "\r\n"))}
-
-		if err := file.GetDb().SaveGlobal(t); err != nil {
-			s.AjaxErr(err.Error())
-		}
-		s.AjaxOk("save success")
-	}
+	s.Data["menu"] = "global"
+	s.Data["bodyClass"] = "runtime-config-page"
+	s.SetInfo("global")
+	s.display("global/index")
 }

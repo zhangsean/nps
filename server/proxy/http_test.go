@@ -387,9 +387,18 @@ func TestBuildHTTPAccessLogLineWithUpstreamRetryEvent(t *testing.T) {
 }
 
 func TestNewHttpUpstreamResponseTimeout(t *testing.T) {
+	previous := UpstreamResponseTimeout()
+	t.Cleanup(func() { SetUpstreamResponseTimeout(previous) })
 	server := NewHttp(nil, nil, 80, 443, false, 0, false, 2*time.Second)
 	if server.upstreamResponseTimeout != 2*time.Second {
 		t.Fatalf("unexpected upstream response timeout %s", server.upstreamResponseTimeout)
+	}
+	if got := UpstreamResponseTimeout(); got != 2*time.Second {
+		t.Fatalf("runtime upstream response timeout = %s", got)
+	}
+	SetUpstreamResponseTimeout(5 * time.Second)
+	if got := UpstreamResponseTimeout(); got != 5*time.Second {
+		t.Fatalf("updated upstream response timeout = %s", got)
 	}
 }
 

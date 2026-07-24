@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/rand"
 	"strconv"
+	"sync"
 	"time"
 
 	"ehang.io/nps/lib/common"
@@ -16,6 +17,7 @@ import (
 
 var (
 	ports        []int
+	portsMu      sync.RWMutex
 	ServerStatus []map[string]interface{}
 )
 
@@ -27,12 +29,21 @@ func StartSystemInfo() {
 }
 
 func InitAllowPort() {
-	p := beego.AppConfig.String("allow_ports")
-	ports = common.GetPorts(p)
+	SetAllowPorts(beego.AppConfig.String("allow_ports"))
+}
+
+func SetAllowPorts(value string) {
+	parsed := common.GetPorts(value)
+	portsMu.Lock()
+	ports = parsed
+	portsMu.Unlock()
 }
 
 func GetAllowPortList() []int {
-	return append([]int(nil), ports...)
+	portsMu.RLock()
+	result := append([]int(nil), ports...)
+	portsMu.RUnlock()
+	return result
 }
 
 func TestServerPort(p int, m string) (b bool) {
@@ -42,8 +53,9 @@ func TestServerPort(p int, m string) (b bool) {
 	if p > 65535 || p < 0 {
 		return false
 	}
-	if len(ports) != 0 {
-		if !common.InIntArr(ports, p) {
+	allowPorts := GetAllowPortList()
+	if len(allowPorts) != 0 {
+		if !common.InIntArr(allowPorts, p) {
 			return false
 		}
 	}

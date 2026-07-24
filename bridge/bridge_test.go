@@ -41,6 +41,20 @@ func TestNewTunnelTargetConnectRetryDefault(t *testing.T) {
 	}
 }
 
+func TestUpdateRuntimeConfig(t *testing.T) {
+	tunnel := NewTunnel(0, "tcp", false, &sync.Map{}, 60, 2, 2, 2, 0)
+	updated := tunnel.UpdateRuntimeConfig(90, 4, 6, 3, 750)
+	if updated.DisconnectTime != 90 || updated.ClientConnectTimeout != 4*time.Second || updated.TargetConnectTimeout != 6*time.Second {
+		t.Fatalf("unexpected runtime timeouts: %#v", updated)
+	}
+	if updated.TargetConnectRetryCount != 3 || updated.TargetConnectRetryInterval != 750*time.Millisecond {
+		t.Fatalf("unexpected runtime retry config: %#v", updated)
+	}
+	if got := tunnel.RuntimeConfig(); got != updated {
+		t.Fatalf("RuntimeConfig() = %#v, want %#v", got, updated)
+	}
+}
+
 func TestDialLocalProxyTargetWithRetrySuccess(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

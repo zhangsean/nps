@@ -106,7 +106,7 @@ func (*flowConn) SetWriteDeadline(t time.Time) error { return nil }
 
 func WebSocketHttpReverseProxy(s *httpServer) *HttpReverseProxy {
 	rp := &HttpReverseProxy{
-		responseHeaderTimeout: s.upstreamResponseTimeout,
+		responseHeaderTimeout: UpstreamResponseTimeout(),
 	}
 	local, _ := net.ResolveTCPAddr("tcp", "127.0.0.1")
 	proxy := WebSocketReverseProxy(&httputil.ReverseProxy{

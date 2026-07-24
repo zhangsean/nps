@@ -37,3 +37,25 @@ target_connect_timeout_seconds|npc 或 nps LocalProxy 连接目标服务器的�
 target_connect_retry_count|npc 或 nps LocalProxy 连接目标服务器失败或超时时的重试次数，默认 2；配置 0 表示不重试
 target_connect_retry_interval_ms|npc 或 nps LocalProxy 连接目标服务器失败后、下一次重试前的最大随机等待毫秒数，默认 0 表示不等待；配置 500 表示随机等待 1~500ms
 upstream_response_timeout_seconds|nps HTTP 代理等待上游响应头的超时时间，直接配置秒数，默认 0 表示不限制；超时后返回 504，并在访问日志中标记 `phase=response_header`
+global_black_ip_list|全局 IP 黑名单，多个精确 IP 使用英文逗号分隔，不支持 CIDR；保存后立即生效
+
+## Web 在线修改与热加载
+
+管理员登录 Web 管理端后，可在“全局参数”页面直接编辑当前进程使用的 `conf/nps.conf`。保存时会先解析和校验完整 INI 内容，成功后保留上一版 `nps.conf.bak`，再更新运行时参数。原“运行配置”入口已合并到此页面。
+
+以下配置可立即作用于新请求或新连接，不关闭当前监听器，也不中断已建立连接：
+
+- `disconnect_timeout`
+- `client_connect_timeout_seconds`
+- `target_connect_timeout_seconds`
+- `target_connect_retry_count`
+- `target_connect_retry_interval_ms`
+- `upstream_response_timeout_seconds`
+- `allow_ports`
+- `global_black_ip_list`；多个精确 IP 使用英文逗号分隔，不支持 CIDR
+- Web 登录、API 鉴权、用户权限与限额开关
+- `http_add_origin_header` 与 IP 归属查询配置
+
+监听地址和端口、桥接协议、TLS 开关和证书路径、Web 入口、访问日志文件、缓存、日志文件等启动期配置会保存到磁盘，并明确列为“需重启进程”。当前版本未识别的新配置项只保存，不会热更新。
+
+全局参数页面仅允许管理员访问，并使用会话令牌防止跨站提交。保存结果分别列出“立即生效”“需重启进程”和“仅保存”的配置项，便于核对实际生效范围。旧版 `conf/global.json` 中已有的全局 IP 黑名单会在首次启动时迁移到 `nps.conf`。

@@ -1,44 +1,385 @@
-<div class="wrapper wrapper-content">
-    <!--全局参数-->
+<style>
+.runtime-config {
+    --config-ink: #26352f;
+    --config-muted: #6c7b75;
+    --config-line: #dfe6e2;
+    --config-live: #198754;
+    --config-wait: #b26a00;
+    color: var(--config-ink);
+}
+.runtime-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 282px;
+    gap: 18px;
+    align-items: stretch;
+}
+.runtime-editor {
+    display: flex;
+    height: calc(100vh - 105px);
+    min-height: 520px;
+    overflow: hidden;
+    border: 1px solid var(--config-line);
+    border-radius: 3px;
+    background: #fff;
+    flex-direction: column;
+}
+.runtime-editor-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 45px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--config-line);
+    background: #fafbfa;
+}
+.runtime-editor-name {
+    min-width: 0;
+    color: #405149;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 14px;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+.runtime-dirty {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--config-muted);
+    font-size: 12px;
+}
+.runtime-dirty:before {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #9aa8a2;
+    content: "";
+}
+.runtime-dirty.is-dirty { color: var(--config-wait); }
+.runtime-dirty.is-dirty:before { background: #e08a00; }
+.runtime-editor-wrap {
+    display: grid;
+    min-height: 0;
+    grid-template-columns: 50px minmax(0, 1fr);
+    background: #17201d;
+    flex: 1;
+}
+#runtime-config-form {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+}
+.runtime-lines {
+    height: 100%;
+    margin: 0;
+    padding: 15px 11px 15px 0;
+    overflow: hidden;
+    border-right: 1px solid rgba(255, 255, 255, .08);
+    color: #60746c;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 13px;
+    line-height: 1.58;
+    text-align: right;
+    user-select: none;
+    white-space: pre;
+}
+#config-content {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    padding: 15px 17px;
+    resize: none;
+    overflow-y: auto;
+    border: 0;
+    border-radius: 0;
+    outline: 0;
+    background: transparent;
+    color: #dce8e3;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 13px;
+    line-height: 1.58;
+    tab-size: 4;
+    white-space: pre;
+}
+#config-content:focus { box-shadow: inset 3px 0 0 #1ab47b; }
+.runtime-save { width: 100%; min-height: 42px; }
+.runtime-save[disabled] { cursor: wait; opacity: .65; }
+.runtime-side {
+    display: grid;
+    gap: 12px;
+    position: sticky;
+    top: 15px;
+    align-self: start;
+    grid-auto-rows: max-content;
+}
+.runtime-side-actions {
+    padding: 12px;
+    border: 1px solid #cbd9d2;
+    border-radius: 3px;
+    background: #f8fbf9;
+    box-shadow: 0 5px 14px rgba(35, 62, 50, .08);
+}
+.runtime-note,
+.runtime-result {
+    padding: 14px;
+    border: 1px solid var(--config-line);
+    border-radius: 3px;
+    background: #fff;
+}
+.runtime-note {
+    border-left: 3px solid #87958f;
+}
+.runtime-note.live { border-left-color: var(--config-live); }
+.runtime-note.wait { border-left-color: var(--config-wait); }
+.runtime-note strong {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 13px;
+}
+.runtime-note p {
+    margin: 0;
+    color: var(--config-muted);
+    font-size: 12px;
+    line-height: 1.6;
+}
+.runtime-note code {
+    color: #285f4c;
+    background: #edf5f1;
+}
+.runtime-note details { margin-top: 8px; }
+.runtime-note summary {
+    cursor: pointer;
+    color: #52635c;
+    font-size: 12px;
+}
+.runtime-key-list {
+    max-height: 170px;
+    margin: 8px 0 0;
+    padding: 9px;
+    overflow: auto;
+    border-radius: 2px;
+    background: #f4f7f5;
+    color: #44564f;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+.runtime-result { display: none; }
+.runtime-result.is-show { display: block; }
+.runtime-result.is-error {
+    border-color: #efc0c0;
+    background: #fff7f7;
+}
+.runtime-result strong {
+    display: block;
+    margin-bottom: 7px;
+}
+.runtime-result-row {
+    margin-top: 6px;
+    color: #55655f;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+.runtime-result-label {
+    display: inline-block;
+    min-width: 76px;
+    font-weight: 700;
+}
+@media (min-width: 981px) and (min-height: 720px) {
+    body.runtime-config-page #page-wrapper {
+        overflow-y: hidden;
+    }
+    body.runtime-config-page .runtime-config {
+        height: 100%;
+        min-height: 0;
+        padding-bottom: 55px;
+        overflow: hidden;
+    }
+    body.runtime-config-page .runtime-config > .row,
+    body.runtime-config-page .runtime-config > .row > .col-lg-12,
+    body.runtime-config-page .runtime-config .ibox,
+    body.runtime-config-page .runtime-config .ibox-content,
+    body.runtime-config-page .runtime-grid {
+        height: 100%;
+        min-height: 0;
+    }
+    body.runtime-config-page .runtime-config .ibox {
+        margin-bottom: 0;
+    }
+    body.runtime-config-page .runtime-editor {
+        height: 100%;
+        min-height: 0;
+    }
+}
+@media (max-width: 980px) {
+    .runtime-grid { grid-template-columns: 1fr; }
+    .runtime-side {
+        position: static;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .runtime-side-actions { grid-column: 1 / -1; }
+    .runtime-result { grid-column: 1 / -1; }
+}
+@media (max-width: 680px) {
+    .runtime-side { grid-template-columns: 1fr; }
+    .runtime-result { grid-column: auto; }
+    .runtime-side-actions { grid-column: auto; }
+    .runtime-editor-wrap { grid-template-columns: 40px minmax(0, 1fr); }
+    .runtime-editor { min-height: 460px; }
+}
+</style>
+
+<div class="wrapper wrapper-content runtime-config">
     <div class="row">
         <div class="col-lg-12">
             <div class="ibox float-e-margins">
-                <div class="ibox-title">
-                    <h5 langtag="word-globalparam"></h5>
-                </div>
                 <div class="ibox-content">
-
-                    <form class="form-horizontal">
-                        <div class="form-group" id="black_ip_list">
-                            <label class="control-label font-bold" langtag="word-globalblackiplist"></label>
-                            <div class="col-sm-4">
-                                <textarea class="form-control" rows="10" type="text" name="globalBlackIpList" placeholder=""
-                                          langtag="info-suchasblackiplist">{{.globalBlackIpList}}</textarea>
-                                <span class="help-block m-b-none" langtag="info-descblackiplist"></span>
+                    <div class="runtime-grid">
+                        <section class="runtime-editor">
+                            <div class="runtime-editor-bar">
+                                <div class="runtime-editor-name"><i class="fa fa-file-code m-r-xs"></i>{{.configPath}}</div>
+                                <div class="runtime-dirty" id="config-dirty" langtag="word-configsaved"></div>
                             </div>
-                        </div>
+                            <form id="runtime-config-form" autocomplete="off">
+                                <input type="hidden" id="config-csrf" name="csrf_token" value="{{.csrfToken}}">
+                                <div class="runtime-editor-wrap">
+                                    <pre class="runtime-lines" id="config-lines" aria-hidden="true"></pre>
+                                    <textarea id="config-content" name="content" spellcheck="false" aria-label="nps.conf">{{.configContent}}</textarea>
+                                </div>
+                            </form>
+                        </section>
 
-                        <div class="form-group">
-                            <div class="col-sm-4 col-sm-offset-2">
-                                <button class="btn btn-success" type="button"
-                                        onclick="submitform('global', '{{.web_base_url}}/global/save', $('form').serializeArray())">
-                                    <i class="fa fa-fw fa-lg fa-check-circle"></i> <span langtag="word-save"></span>
+                        <aside class="runtime-side">
+                            <div class="runtime-side-actions">
+                                <button class="btn btn-success runtime-save" id="config-save" type="submit" form="runtime-config-form">
+                                    <i class="fa fa-check-circle m-r-xs"></i><span langtag="word-savehotreload"></span>
                                 </button>
                             </div>
-                        </div>
-                    </form>
+                            <section class="runtime-result" id="config-result" role="status" aria-live="polite">
+                                <strong id="config-result-message"></strong>
+                                <div id="config-result-details"></div>
+                            </section>
+                            <section class="runtime-note live">
+                                <strong langtag="word-hotconfig"></strong>
+                                <p langtag="info-hotconfig"></p>
+                                <details>
+                                    <summary langtag="word-viewkeys"></summary>
+                                    <pre class="runtime-key-list">{{.hotConfigKeys}}</pre>
+                                </details>
+                            </section>
+                            <section class="runtime-note wait">
+                                <strong langtag="word-restartconfig"></strong>
+                                <p langtag="info-restartconfig"></p>
+                                <details>
+                                    <summary langtag="word-viewkeys"></summary>
+                                    <pre class="runtime-key-list">{{.restartConfigKeys}}</pre>
+                                </details>
+                            </section>
+                            <section class="runtime-note">
+                                <strong langtag="word-globalblackiplist"></strong>
+                                <p langtag="info-globalblackipconfig"></p>
+                            </section>
+                            <section class="runtime-note">
+                                <strong langtag="word-configsafety"></strong>
+                                <p langtag="info-configsafety"></p>
+                            </section>
+                        </aside>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-
-
 </div>
 
 <script>
-    window.addEventListener('resize', () => {
-        for (var key in charts) {
-            charts[key].resize();
+(function () {
+    var form = $('#runtime-config-form');
+    var editor = $('#config-content');
+    var lineBox = $('#config-lines');
+    var dirty = $('#config-dirty');
+    var saveButton = $('#config-save');
+    var result = $('#config-result');
+    var baseline = editor.val();
+
+    function updateLines() {
+        var count = Math.max(1, editor.val().split('\n').length);
+        var lines = [];
+        for (var index = 1; index <= count; index++) lines.push(index);
+        lineBox.text(lines.join('\n'));
+        lineBox.scrollTop(editor.scrollTop());
+    }
+
+    function updateDirty() {
+        var changed = editor.val() !== baseline;
+        dirty.toggleClass('is-dirty', changed);
+        dirty.text(changed ? '有未保存修改' : '已与磁盘同步');
+    }
+
+    function resultRow(label, values) {
+        if (!values || !values.length) return null;
+        return $('<div class="runtime-result-row"></div>')
+            .append($('<span class="runtime-result-label"></span>').text(label))
+            .append(document.createTextNode(values.join(', ')));
+    }
+
+    function showResult(response, ok) {
+        result.addClass('is-show').toggleClass('is-error', !ok);
+        $('#config-result-message').text(response.msg || (ok ? '配置已保存' : '保存失败'));
+        var details = $('#config-result-details').empty();
+        [
+            resultRow('热生效配置', response.hot_applied),
+            resultRow('重启生效配置', response.restart_required),
+            resultRow('仅保存', response.deferred)
+        ].forEach(function (row) { if (row) details.append(row); });
+    }
+
+    editor.on('input', function () {
+        updateLines();
+        updateDirty();
+    });
+    editor.on('scroll', function () { lineBox.scrollTop(editor.scrollTop()); });
+    editor.on('keydown', function (event) {
+        if (event.key === 'Tab') {
+            event.preventDefault();
+            var element = this;
+            var start = element.selectionStart;
+            element.value = element.value.substring(0, start) + '    ' + element.value.substring(element.selectionEnd);
+            element.selectionStart = element.selectionEnd = start + 4;
+            $(element).trigger('input');
         }
     });
+
+    form.on('submit', function (event) {
+        event.preventDefault();
+        npsConfirm('确认保存 nps.conf？热生效配置会立即作用于新请求或新连接。', function () {
+            saveButton.prop('disabled', true).find('span').text('正在保存');
+            $.ajax({
+                type: 'POST',
+                url: window.nps.web_base_url + '/config/save',
+                dataType: 'json',
+                data: { content: editor.val(), csrf_token: $('#config-csrf').val() }
+            }).done(function (response) {
+                showResult(response, response.status === 1);
+                if (response.status === 1) {
+                    baseline = editor.val().replace(/\r\n?/g, '\n');
+                    if (baseline.slice(-1) !== '\n') baseline += '\n';
+                    editor.val(baseline);
+                    if (response.csrf_token) $('#config-csrf').val(response.csrf_token);
+                    updateLines();
+                    updateDirty();
+                }
+            }).fail(function (xhr) {
+                showResult(xhr.responseJSON || { msg: '保存失败：HTTP ' + xhr.status }, false);
+            }).always(function () {
+                saveButton.prop('disabled', false).find('span').text('保存并热加载');
+            });
+        });
+    });
+
+    updateLines();
+    updateDirty();
+})();
 </script>

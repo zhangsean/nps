@@ -4665,6 +4665,61 @@ body.fixed-sidebar.body-small.mini-navbar .footer.fixed {
 body.body-small .footer.fixed {
   margin-left: 0;
 }
+
+/* Fixed application shell: the navigation stays put while the main page scrolls. */
+body.app-shell {
+  overflow: hidden;
+}
+body.app-shell #wrapper {
+  height: 100vh;
+  overflow: hidden;
+}
+body.app-shell .navbar-static-side {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 220px;
+  height: 100vh;
+  overflow: hidden;
+}
+body.app-shell .sidebar-collapse {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+body.app-shell .sidebar-collapse::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+body.app-shell #page-wrapper {
+  width: calc(100% - 220px);
+  height: calc(100vh - 60px);
+  min-height: 0;
+  margin-left: 220px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+body.app-shell.mini-navbar #page-wrapper {
+  width: calc(100% - 70px);
+  margin-left: 70px;
+}
+@media (max-width: 768px) {
+  body.app-shell #page-wrapper,
+  body.app-shell.mini-navbar #page-wrapper {
+    width: 100%;
+    margin-left: 0;
+  }
+  body.app-shell.body-small .navbar-static-side {
+    width: 0;
+  }
+  body.app-shell.body-small.mini-navbar .navbar-static-side {
+    width: 220px;
+  }
+}
 /* PANELS */
 .panel-title > .small,
 .panel-title > .small > a,

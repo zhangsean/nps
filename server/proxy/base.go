@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 
 	"ehang.io/nps/bridge"
@@ -23,6 +24,11 @@ type Service interface {
 type NetBridge interface {
 	SendLinkInfo(clientId int, link *conn.Link, t *file.Tunnel) (target net.Conn, err error)
 }
+
+var globalBlackIpState = struct {
+	sync.RWMutex
+	values map[string]struct{}
+}{values: make(map[string]struct{})}
 
 // BaseServer struct
 type BaseServer struct {
@@ -117,6 +123,49 @@ func in(target string, str_array []string) bool {
 	return false
 }
 
+func ParseGlobalBlackIpList(value string) ([]string, error) {
+	items := strings.FieldsFunc(value, func(r rune) bool {
+		return r == ',' || r == ';' || r == '\n' || r == '\r' || r == '\t' || r == ' '
+	})
+	unique := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		ip := net.ParseIP(strings.TrimSpace(strings.Trim(item, "[]")))
+		if ip == nil {
+			return nil, fmt.Errorf("global_black_ip_list contains invalid IP address %q", item)
+		}
+		unique[ip.String()] = struct{}{}
+	}
+	result := make([]string, 0, len(unique))
+	for ip := range unique {
+		result = append(result, ip)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
+func SetGlobalBlackIpList(values []string) {
+	next := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if ip := net.ParseIP(strings.TrimSpace(strings.Trim(value, "[]"))); ip != nil {
+			next[ip.String()] = struct{}{}
+		}
+	}
+	globalBlackIpState.Lock()
+	globalBlackIpState.values = next
+	globalBlackIpState.Unlock()
+}
+
+func GlobalBlackIpList() []string {
+	globalBlackIpState.RLock()
+	result := make([]string, 0, len(globalBlackIpState.values))
+	for ip := range globalBlackIpState.values {
+		result = append(result, ip)
+	}
+	globalBlackIpState.RUnlock()
+	sort.Strings(result)
+	return result
+}
+
 // create a new connection and start bytes copying
 func (s *BaseServer) DealClient(c *conn.Conn, client *file.Client, addr string,
 	rb []byte, tp string, f func(), flow *file.Flow, localProxy bool, task *file.Tunnel, targetHosts []string, retryHooks ...conn.TargetConnectRetryHook) error {
@@ -153,15 +202,19 @@ func (s *BaseServer) DealClient(c *conn.Conn, client *file.Client, addr string,
 
 // 判断访问地址是否在全局黑名单内
 func IsGlobalBlackIp(ipPort string) bool {
-	// 判断访问地址是否在全局黑名单内
-	global := file.GetDb().GetGlobal()
-	if global != nil {
-		ip := common.GetIpByAddr(ipPort)
-		if in(ip, global.BlackIpList) {
-			logs.Error("IP地址[" + ip + "]在全局黑名单列表内")
-			return true
-		}
+	ip := strings.TrimSpace(strings.Trim(ipPort, "[]"))
+	if host, _, err := net.SplitHostPort(ipPort); err == nil {
+		ip = strings.Trim(host, "[]")
 	}
-
-	return false
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	globalBlackIpState.RLock()
+	_, blocked := globalBlackIpState.values[parsed.String()]
+	globalBlackIpState.RUnlock()
+	if blocked {
+		logs.Error("IP地址[" + parsed.String() + "]在全局黑名单列表内")
+	}
+	return blocked
 }

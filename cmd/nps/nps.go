@@ -236,6 +236,7 @@ func run() {
 	//crypt.InitTls(filepath.Join(common.GetRunPath(), "conf", "server.pem"), filepath.Join(common.GetRunPath(), "conf", "server.key"))
 	crypt.InitTls()
 	tool.InitAllowPort()
+	server.InitializeGlobalBlackIpConfig()
 	tool.StartSystemInfo()
 	timeout, err := beego.AppConfig.Int("disconnect_timeout")
 	if err != nil {
