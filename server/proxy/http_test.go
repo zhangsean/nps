@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -522,12 +524,40 @@ func TestBuildProxyHTTPRequestBytes(t *testing.T) {
 }
 
 func TestHTTPErrorResponseBytes(t *testing.T) {
-	server := &httpServer{BaseServer: BaseServer{errorContent: []byte("body")}}
-	if got, want := server.httpErrorResponseBytes(http.StatusBadGateway), int64(len("HTTP/1.1 502 Bad Gateway\r\n\r\nbody")); got != want {
-		t.Fatalf("unexpected 502 response bytes %d, want %d", got, want)
+	server := &httpServer{BaseServer: BaseServer{errorContent: []byte("nps 404")}}
+	for _, statusCode := range []int{http.StatusBadGateway, http.StatusGatewayTimeout} {
+		displayText := httpErrorDisplayText(statusCode, http.StatusText(statusCode))
+		body := server.httpErrorBody(statusCode)
+		if !strings.Contains(string(body), "["+strconv.Itoa(statusCode)+"] "+displayText) {
+			t.Fatalf("status %d body does not match response status: %q", statusCode, body)
+		}
+		if strings.Contains(string(body), "[404]") {
+			t.Fatalf("status %d body still contains the 404 page: %q", statusCode, body)
+		}
+		want := int64(len(fmt.Sprintf("HTTP/1.1 %d %s\r\n\r\n", statusCode, http.StatusText(statusCode))) + len(body))
+		if got := server.httpErrorResponseBytes(statusCode); got != want {
+			t.Fatalf("unexpected %d response bytes %d, want %d", statusCode, got, want)
+		}
 	}
-	if got, want := server.httpErrorResponseBytes(http.StatusGatewayTimeout), int64(len("HTTP/1.1 504 Gateway Timeout\r\n\r\nbody")); got != want {
-		t.Fatalf("unexpected 504 response bytes %d, want %d", got, want)
+	if got := string(server.httpErrorBody(http.StatusNotFound)); got != "nps 404" {
+		t.Fatalf("404 should keep the configured not-found page, got %q", got)
+	}
+}
+
+func TestHTTPUpstreamErrorBodyIncludesTarget(t *testing.T) {
+	server := &httpServer{}
+	body := server.httpUpstreamErrorBody(http.StatusBadGateway, `10.0.0.8:8080<script>`)
+	text := string(body)
+	for _, want := range []string{"[502] Bad Upstream", "Target: 10.0.0.8:8080&lt;script&gt;"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("upstream error body missing %q in %q", want, text)
+		}
+	}
+	if strings.Contains(text, "[502] Bad Gateway") || strings.Contains(text, "10.0.0.8:8080<script>") {
+		t.Fatalf("upstream error body contains old or unescaped content: %q", text)
+	}
+	if got, want := server.httpUpstreamErrorResponseBytes(http.StatusBadGateway, "10.0.0.8:8080"), int64(len("HTTP/1.1 502 Bad Gateway\r\n\r\n")+len(server.httpUpstreamErrorBody(http.StatusBadGateway, "10.0.0.8:8080"))); got != want {
+		t.Fatalf("unexpected upstream response bytes %d, want %d", got, want)
 	}
 }
 

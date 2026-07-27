@@ -3,6 +3,7 @@ package proxy
 import (
 	"errors"
 	"fmt"
+	"html"
 	"net"
 	"net/http"
 	"sort"
@@ -70,27 +71,81 @@ func (s *BaseServer) writeConnFail(c net.Conn) {
 }
 
 func (s *BaseServer) writeHTTPError(c net.Conn, statusCode int) {
+	s.writeHTTPErrorBody(c, statusCode, s.httpErrorBody(statusCode))
+}
+
+func (s *BaseServer) writeHTTPUpstreamError(c net.Conn, statusCode int, targetAddr string) {
+	s.writeHTTPErrorBody(c, statusCode, s.httpUpstreamErrorBody(statusCode, targetAddr))
+}
+
+func (s *BaseServer) writeHTTPErrorBody(c net.Conn, statusCode int, body []byte) {
 	if c == nil {
 		return
 	}
-	statusText := http.StatusText(statusCode)
-	if statusText == "" {
-		statusText = http.StatusText(http.StatusInternalServerError)
-		statusCode = http.StatusInternalServerError
-	}
+	statusCode, statusText := normalizeHTTPErrorStatus(statusCode)
 	_, _ = c.Write([]byte(fmt.Sprintf("HTTP/1.1 %d %s\r\n\r\n", statusCode, statusText)))
-	if len(s.errorContent) > 0 {
-		_, _ = c.Write(s.errorContent)
+	if len(body) > 0 {
+		_, _ = c.Write(body)
 	}
 }
 
 func (s *BaseServer) httpErrorResponseBytes(statusCode int) int64 {
+	return httpErrorResponseBytesWithBody(statusCode, s.httpErrorBody(statusCode))
+}
+
+func (s *BaseServer) httpUpstreamErrorResponseBytes(statusCode int, targetAddr string) int64 {
+	return httpErrorResponseBytesWithBody(statusCode, s.httpUpstreamErrorBody(statusCode, targetAddr))
+}
+
+func httpErrorResponseBytesWithBody(statusCode int, body []byte) int64 {
+	statusCode, statusText := normalizeHTTPErrorStatus(statusCode)
+	return int64(len(fmt.Sprintf("HTTP/1.1 %d %s\r\n\r\n", statusCode, statusText)) + len(body))
+}
+
+func (s *BaseServer) httpErrorBody(statusCode int) []byte {
+	statusCode, statusText := normalizeHTTPErrorStatus(statusCode)
+	if statusCode == http.StatusNotFound && len(s.errorContent) > 0 {
+		return s.errorContent
+	}
+	return buildHTTPErrorBody(statusCode, httpErrorDisplayText(statusCode, statusText), "")
+}
+
+func (s *BaseServer) httpUpstreamErrorBody(statusCode int, targetAddr string) []byte {
+	statusCode, statusText := normalizeHTTPErrorStatus(statusCode)
+	return buildHTTPErrorBody(statusCode, httpErrorDisplayText(statusCode, statusText), targetAddr)
+}
+
+func buildHTTPErrorBody(statusCode int, displayText string, targetAddr string) []byte {
+	targetHTML := ""
+	if targetAddr = strings.TrimSpace(targetAddr); targetAddr != "" {
+		targetHTML = fmt.Sprintf("\n<p>Target: %s</p>", html.EscapeString(targetAddr))
+	}
+	return []byte(fmt.Sprintf(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>%d %s</title>
+</head>
+<body>
+<h3>[%d] %s</h3>%s
+</body>
+</html>`, statusCode, displayText, statusCode, displayText, targetHTML))
+}
+
+func httpErrorDisplayText(statusCode int, statusText string) string {
+	if statusCode == http.StatusBadGateway {
+		return "Bad Upstream"
+	}
+	return statusText
+}
+
+func normalizeHTTPErrorStatus(statusCode int) (int, string) {
 	statusText := http.StatusText(statusCode)
 	if statusText == "" {
-		statusText = http.StatusText(http.StatusInternalServerError)
 		statusCode = http.StatusInternalServerError
+		statusText = http.StatusText(statusCode)
 	}
-	return int64(len(fmt.Sprintf("HTTP/1.1 %d %s\r\n\r\n", statusCode, statusText)) + len(s.errorContent))
+	return statusCode, statusText
 }
 
 // auth check

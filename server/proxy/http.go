@@ -336,7 +336,7 @@ func (s *httpServer) proxyHTTPRequestWithRetry(c *conn.Conn, host *file.Host, r 
 			if phase == httpAccessLogPhaseTargetConnect {
 				finishedAttempts = attempts
 			}
-			s.finishHTTPUpstreamError(c, accessLog, phase, err, finishedAttempts)
+			s.finishHTTPUpstreamError(c, accessLog, phase, targetAddr, err, finishedAttempts)
 			return false
 		}
 		delay := randomHTTPUpstreamRetryDelay(retryInterval)
@@ -429,14 +429,14 @@ func (s *httpServer) proxyHTTPRequestOnce(c *conn.Conn, host *file.Host, r *http
 	return true, false, httpAccessLogPhaseComplete, targetAddr, nil
 }
 
-func (s *httpServer) finishHTTPUpstreamError(c *conn.Conn, accessLog *httpAccessLogRecord, phase string, err error, attempts int) {
+func (s *httpServer) finishHTTPUpstreamError(c *conn.Conn, accessLog *httpAccessLogRecord, phase string, targetAddr string, err error, attempts int) {
 	statusCode := upstreamHTTPErrorStatusCode(err)
 	if phase == httpAccessLogPhaseTargetConnect {
 		statusCode = http.StatusBadGateway
 	}
 	accessLog.SetPhase(phase)
 	accessLog.SetStatusCode(statusCode)
-	accessLog.SetResponseBytes(s.httpErrorResponseBytes(statusCode))
+	accessLog.SetResponseBytes(s.httpUpstreamErrorResponseBytes(statusCode, targetAddr))
 	if phase == httpAccessLogPhaseTargetConnect {
 		accessLog.Finish(upstreamUnavailableErrorText(err, attempts))
 	} else if isRetryableUpstreamDisconnect(err) {
@@ -446,7 +446,7 @@ func (s *httpServer) finishHTTPUpstreamError(c *conn.Conn, accessLog *httpAccess
 	} else {
 		accessLog.Finish(upstreamUnavailableErrorText(err, attempts))
 	}
-	s.writeHTTPError(c.Conn, statusCode)
+	s.writeHTTPUpstreamError(c.Conn, statusCode, targetAddr)
 }
 
 type upstreamRetryConfigProvider interface {
