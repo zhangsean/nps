@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"bufio"
+	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"errors"
@@ -520,6 +522,84 @@ func TestBuildProxyHTTPRequestBytes(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Fatalf("proxy request bytes missing %q in %q", want, text)
 		}
+	}
+}
+
+func TestBuildProxyHTTPRequestBytesRemovesHopByHopHeaders(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/api/list", nil)
+	request.Close = true
+	request.Header.Set("Connection", "close, X-Remove-Me")
+	request.Header.Set("Proxy-Connection", "close")
+	request.Header.Set("Keep-Alive", "timeout=5")
+	request.Header.Set("Proxy-Authenticate", "Basic")
+	request.Header.Set("Proxy-Authorization", "Basic secret")
+	request.Header.Set("Te", "gzip, trailers")
+	request.Header.Set("Trailer", "X-Trailer")
+	request.Header.Set("Transfer-Encoding", "chunked")
+	request.Header.Set("Upgrade", "test")
+	request.Header.Set("X-Remove-Me", "secret")
+	request.Header.Set("X-End-To-End", "preserved")
+
+	got, err := buildProxyHTTPRequestBytes(request)
+	if err != nil {
+		t.Fatalf("build proxy request bytes error: %v", err)
+	}
+	forwarded, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(got)))
+	if err != nil {
+		t.Fatalf("read forwarded request error: %v", err)
+	}
+	defer forwarded.Body.Close()
+
+	if forwarded.Close {
+		t.Fatal("forwarded request unexpectedly asks the upstream to close")
+	}
+	for _, name := range []string{
+		"Connection",
+		"Proxy-Connection",
+		"Keep-Alive",
+		"Proxy-Authenticate",
+		"Proxy-Authorization",
+		"Trailer",
+		"Upgrade",
+		"X-Remove-Me",
+	} {
+		if value := forwarded.Header.Get(name); value != "" {
+			t.Fatalf("forwarded request retained hop-by-hop header %s=%q", name, value)
+		}
+	}
+	if value := forwarded.Header.Get("Te"); value != "trailers" {
+		t.Fatalf("forwarded request TE = %q, want trailers", value)
+	}
+	if value := forwarded.Header.Get("X-End-To-End"); value != "preserved" {
+		t.Fatalf("forwarded end-to-end header = %q, want preserved", value)
+	}
+	if !request.Close || request.Header.Get("Connection") != "close, X-Remove-Me" {
+		t.Fatal("building the upstream request mutated downstream connection semantics")
+	}
+}
+
+func TestBuildProxyHTTPRequestBytesKeepsHTTP10CloseDownstreamOnly(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/legacy", nil)
+	request.Proto = "HTTP/1.0"
+	request.ProtoMajor = 1
+	request.ProtoMinor = 0
+	request.Close = true
+
+	got, err := buildProxyHTTPRequestBytes(request)
+	if err != nil {
+		t.Fatalf("build proxy request bytes error: %v", err)
+	}
+	forwarded, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(got)))
+	if err != nil {
+		t.Fatalf("read forwarded request error: %v", err)
+	}
+	defer forwarded.Body.Close()
+
+	if forwarded.Proto != "HTTP/1.1" || forwarded.Close {
+		t.Fatalf("forwarded request protocol=%s close=%t, want HTTP/1.1 close=false", forwarded.Proto, forwarded.Close)
+	}
+	if request.Proto != "HTTP/1.0" || !request.Close {
+		t.Fatalf("downstream request protocol=%s close=%t, want HTTP/1.0 close=true", request.Proto, request.Close)
 	}
 }
 

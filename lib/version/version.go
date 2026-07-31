@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const VERSION = "0.27.24"
+const VERSION = "0.27.25"
 
 // Compulsory minimum version, Minimum downward compatibility to this version
 func GetVersion() string {

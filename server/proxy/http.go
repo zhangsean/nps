@@ -255,6 +255,7 @@ reset:
 			currentAccessLog.SetRequestBytes(estimateHTTPAccessLogRequestBytes(r))
 		}
 		accessLog = nil
+		downstreamWantsClose := r.Close
 		//if the cache start and the request is in the cache list, return the cache
 		if s.useCache {
 			if v, ok := s.cache.Get(filepath.Join(host.Host, r.URL.Path)); ok {
@@ -295,6 +296,9 @@ reset:
 			break
 		}
 		host.Client.Flow.Add(int64(len(requestBytes)), int64(len(requestBytes)))
+		if downstreamWantsClose {
+			break
+		}
 
 	readReq:
 		//read req from connection
@@ -479,11 +483,61 @@ func (s *httpServer) upstreamDisconnectRetryInterval() time.Duration {
 }
 
 func buildProxyHTTPRequestBytes(r *http.Request) ([]byte, error) {
+	upstreamRequest := cloneProxyHTTPRequest(r)
 	var buf bytes.Buffer
-	if err := r.Write(&buf); err != nil {
+	if err := upstreamRequest.Write(&buf); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+var hopByHopRequestHeaders = []string{
+	"Connection",
+	"Proxy-Connection",
+	"Keep-Alive",
+	"Proxy-Authenticate",
+	"Proxy-Authorization",
+	"Te",
+	"Trailer",
+	"Transfer-Encoding",
+	"Upgrade",
+}
+
+func cloneProxyHTTPRequest(r *http.Request) *http.Request {
+	upstreamRequest := new(http.Request)
+	*upstreamRequest = *r
+	upstreamRequest.Header = r.Header.Clone()
+	forwardTrailers := headerValuesContainToken(upstreamRequest.Header.Values("Te"), "trailers")
+	removeHopByHopRequestHeaders(upstreamRequest.Header)
+	if forwardTrailers {
+		upstreamRequest.Header.Set("Te", "trailers")
+	}
+	upstreamRequest.Close = false
+	return upstreamRequest
+}
+
+func removeHopByHopRequestHeaders(header http.Header) {
+	for _, value := range header.Values("Connection") {
+		for _, name := range strings.Split(value, ",") {
+			if name = strings.TrimSpace(name); name != "" {
+				header.Del(name)
+			}
+		}
+	}
+	for _, name := range hopByHopRequestHeaders {
+		header.Del(name)
+	}
+}
+
+func headerValuesContainToken(values []string, token string) bool {
+	for _, value := range values {
+		for _, part := range strings.Split(value, ",") {
+			if strings.EqualFold(strings.TrimSpace(part), token) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func isRetryableUpstreamDisconnect(err error) bool {
