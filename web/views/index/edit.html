@@ -44,7 +44,7 @@
                     <div class="form-group">
                         <label class="col-sm-2 control-label font-bold" langtag="word-clientid"></label>
                         <div class="col-sm-10">
-                            <input value="{{.t.Client.Id}}" value="{{.client_id}}" {{if eq true .t.Target.LocalProxy}}readonly{{end}}
+                            <input value="{{.t.Client.Id}}" {{if eq true .t.Target.LocalProxy}}readonly{{end}}
                                 class="form-control" type="text" id="client_id" name="client_id" placeholder="" langtag="word-clientid">
                         </div>
                     </div>
@@ -239,7 +239,7 @@
         var useLocalProxy = localProxy.val() == 1
         cid.attr('readonly', useLocalProxy)
         if (useLocalProxy) {
-            oldId = cid.val()
+            var oldId = cid.val()
             if (oldId == '客户端 ID') {
                 oldId = ''
             }
@@ -249,7 +249,9 @@
             cid.val(1)
         } else {
             var oldId = cid.attr('oldId')
-            cid.val(oldId === undefined ? '' : oldId)
+            if (oldId !== undefined) {
+                cid.val(oldId)
+            }
         }
     }
 

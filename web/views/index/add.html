@@ -250,7 +250,7 @@
         var useLocalProxy = localProxy.val() == 1
         cid.attr('readonly', useLocalProxy)
         if (useLocalProxy) {
-            oldId = cid.val()
+            var oldId = cid.val()
             if (oldId == '客户端 ID') {
                 oldId = ''
             }
@@ -260,7 +260,9 @@
             cid.val(1)
         } else {
             var oldId = cid.attr('oldId')
-            cid.val(oldId === undefined ? '' : oldId)
+            if (oldId !== undefined) {
+                cid.val(oldId)
+            }
         }
     }
 
