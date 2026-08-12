@@ -35,6 +35,39 @@ func TestTunnelFormsPreserveRenderedClientIDOnInitialLoad(t *testing.T) {
 	}
 }
 
+func TestNewTunnelFormDefaultsToEditTemplateShape(t *testing.T) {
+	tunnel := newTunnelForm(7, "tcp")
+	if tunnel.Id != 0 {
+		t.Fatalf("new tunnel id = %d, want 0", tunnel.Id)
+	}
+	if tunnel.Mode != "tcp" {
+		t.Fatalf("new tunnel mode = %q, want tcp", tunnel.Mode)
+	}
+	if tunnel.Client == nil || tunnel.Client.Id != 7 {
+		t.Fatalf("new tunnel client = %#v, want id 7", tunnel.Client)
+	}
+	if tunnel.Target == nil {
+		t.Fatal("new tunnel target should be initialized for edit template rendering")
+	}
+	if tunnel.ServerIp != "0.0.0.0" {
+		t.Fatalf("new tunnel server ip = %q, want 0.0.0.0", tunnel.ServerIp)
+	}
+}
+
+func TestTunnelEditTemplateKeepsAddCloneTitlesSeparate(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "views", "index", "edit.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(content)
+	if !strings.Contains(source, `{{if .is_add}}add{{else}}{{if eq 0 .t.Id}}clone{{else}}edit{{end}}{{end}}`) {
+		t.Fatal("edit template should render add, clone, and edit titles from the shared form")
+	}
+	if !strings.Contains(source, `submitform('{{if eq 0 .t.Id}}add{{else}}edit{{end}}'`) {
+		t.Fatal("shared edit template should still submit new or cloned tunnels to the add endpoint")
+	}
+}
+
 func TestValidateTunnelUploadNormalizesBrowseURL(t *testing.T) {
 	tunnel := &file.Tunnel{
 		Mode:      "file",

@@ -49,6 +49,19 @@ func validateTunnelUpload(t *file.Tunnel) string {
 	return ""
 }
 
+func newTunnelForm(clientId int, mode string) *file.Tunnel {
+	if mode == "" {
+		mode = "tcp"
+	}
+	return &file.Tunnel{
+		Mode:     mode,
+		ServerIp: "0.0.0.0",
+		Client:   &file.Client{Id: clientId},
+		Target:   &file.Target{},
+		Flow:     &file.Flow{},
+	}
+}
+
 func (s *IndexController) Index() {
 	s.Data["web_base_url"] = beego.AppConfig.String("web_base_url")
 	s.Data["data"] = server.GetDashboardData()
@@ -152,8 +165,10 @@ func (s *IndexController) Add() {
 			s.display("index/edit")
 		} else {
 			s.Data["client_id"] = s.getEscapeString("client_id")
+			s.Data["t"] = newTunnelForm(s.GetIntNoErr("client_id"), s.getEscapeString("type"))
+			s.Data["is_add"] = true
 			s.SetInfo("add tunnel")
-			s.display()
+			s.display("index/edit")
 		}
 	} else {
 		id := int(file.GetDb().JsonDb.GetTaskId())
