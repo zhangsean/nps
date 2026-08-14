@@ -27,35 +27,64 @@ func (s *Rate) Start() {
 }
 
 func (s *Rate) add(size int64) {
-	if res := s.bucketSize - s.bucketSurplusSize; res < s.bucketAddSize {
-		atomic.AddInt64(&s.bucketSurplusSize, res)
+	if size <= 0 || s.bucketSize <= 0 {
 		return
 	}
-	atomic.AddInt64(&s.bucketSurplusSize, size)
+	for {
+		current := atomic.LoadInt64(&s.bucketSurplusSize)
+		available := s.bucketSize - current
+		if available <= 0 {
+			return
+		}
+		addSize := size
+		if addSize > available {
+			addSize = available
+		}
+		if atomic.CompareAndSwapInt64(&s.bucketSurplusSize, current, current+addSize) {
+			return
+		}
+	}
 }
 
-//回桶
+// 回桶
 func (s *Rate) ReturnBucket(size int64) {
 	s.add(size)
 }
 
-//停止
+// 停止
 func (s *Rate) Stop() {
 	s.stopChan <- true
 }
 
 func (s *Rate) Get(size int64) {
-	if s.bucketSurplusSize >= size {
-		atomic.AddInt64(&s.bucketSurplusSize, -size)
+	if size <= 0 || s.bucketSize <= 0 || s.bucketAddSize <= 0 {
 		return
 	}
+	for size > s.bucketSize {
+		s.get(s.bucketSize)
+		size -= s.bucketSize
+	}
+	s.get(size)
+}
+
+func (s *Rate) get(size int64) {
+	if size <= 0 {
+		return
+	}
+	for {
+		current := atomic.LoadInt64(&s.bucketSurplusSize)
+		if current >= size && atomic.CompareAndSwapInt64(&s.bucketSurplusSize, current, current-size) {
+			return
+		}
+		break
+	}
 	ticker := time.NewTicker(time.Millisecond * 100)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			if s.bucketSurplusSize >= size {
-				atomic.AddInt64(&s.bucketSurplusSize, -size)
-				ticker.Stop()
+			current := atomic.LoadInt64(&s.bucketSurplusSize)
+			if current >= size && atomic.CompareAndSwapInt64(&s.bucketSurplusSize, current, current-size) {
 				return
 			}
 		}
