@@ -149,6 +149,52 @@ func TestDialLocalProxyTargetsWithRetryPollsTargets(t *testing.T) {
 	<-done
 }
 
+func TestLocalProxyTargetCircuitIsolatesFailingTarget(t *testing.T) {
+	badListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen bad target error: %v", err)
+	}
+	badTarget := badListener.Addr().String()
+	_ = badListener.Close()
+
+	tunnel := NewTunnel(0, "tcp", false, &sync.Map{}, 60, 1, 1, 0, 0)
+	tunnel.localProxyTargetCircuit = newLocalProxyTargetCircuitBreaker(2, time.Minute)
+	for i := 0; i < 2; i++ {
+		conn, err := tunnel.dialLocalProxyTargetWithRetry("tcp", badTarget, nil)
+		if err == nil {
+			_ = conn.Close()
+			t.Fatalf("expected bad target dial %d to fail", i+1)
+		}
+	}
+	if conn, err := tunnel.dialLocalProxyTargetWithRetry("tcp", badTarget, nil); err == nil {
+		_ = conn.Close()
+		t.Fatal("expected isolated bad target to fail")
+	} else if _, ok := err.(*localProxyTargetCircuitOpenError); !ok {
+		t.Fatalf("expected circuit open error, got %T: %v", err, err)
+	}
+
+	goodListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen good target error: %v", err)
+	}
+	defer goodListener.Close()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		conn, err := goodListener.Accept()
+		if err == nil {
+			_ = conn.Close()
+		}
+	}()
+
+	conn, err := tunnel.dialLocalProxyTargetWithRetry("tcp", goodListener.Addr().String(), nil)
+	if err != nil {
+		t.Fatalf("healthy target should not be affected by isolated target: %v", err)
+	}
+	_ = conn.Close()
+	<-done
+}
+
 func TestRandomTargetConnectRetryDelayRange(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		delay := randomTargetConnectRetryDelay(500 * time.Millisecond)
