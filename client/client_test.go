@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	npsconn "ehang.io/nps/lib/conn"
 )
 
 func TestFetchPublicCip(t *testing.T) {
@@ -123,6 +125,56 @@ func TestDialTargetsWithRetryPollsTargets(t *testing.T) {
 		t.Fatalf("dialTargetsWithRetry returned error: %v", err)
 	}
 	_ = conn.Close()
+	<-done
+}
+
+func TestDialTargetCircuitIsolatesFailingTarget(t *testing.T) {
+	oldCircuit := targetConnectCircuit
+	targetConnectCircuit = npsconn.NewTargetCircuitBreaker(2, time.Minute)
+	t.Cleanup(func() {
+		targetConnectCircuit = oldCircuit
+	})
+
+	badListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen bad target error: %v", err)
+	}
+	badTarget := badListener.Addr().String()
+	_ = badListener.Close()
+
+	for i := 0; i < 2; i++ {
+		dialedConn, err := dialTargetWithRetry("tcp", badTarget, 10*time.Millisecond, 0, 0)
+		if err == nil {
+			_ = dialedConn.Close()
+			t.Fatalf("expected bad target dial %d to fail", i+1)
+		}
+	}
+	if dialedConn, err := dialTargetWithRetry("tcp", badTarget, 10*time.Millisecond, 0, 0); err == nil {
+		_ = dialedConn.Close()
+		t.Fatal("expected isolated bad target to fail")
+	} else if _, ok := err.(*npsconn.TargetCircuitOpenError); !ok {
+		t.Fatalf("expected circuit open error, got %T: %v", err, err)
+	}
+
+	goodListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen good target error: %v", err)
+	}
+	defer goodListener.Close()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		conn, err := goodListener.Accept()
+		if err == nil {
+			_ = conn.Close()
+		}
+	}()
+
+	dialedConn, err := dialTargetWithRetry("tcp", goodListener.Addr().String(), time.Second, 0, 0)
+	if err != nil {
+		t.Fatalf("healthy target should not be affected by isolated target: %v", err)
+	}
+	_ = dialedConn.Close()
 	<-done
 }
 

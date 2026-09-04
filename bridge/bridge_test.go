@@ -158,18 +158,18 @@ func TestLocalProxyTargetCircuitIsolatesFailingTarget(t *testing.T) {
 	_ = badListener.Close()
 
 	tunnel := NewTunnel(0, "tcp", false, &sync.Map{}, 60, 1, 1, 0, 0)
-	tunnel.localProxyTargetCircuit = newLocalProxyTargetCircuitBreaker(2, time.Minute)
+	tunnel.localProxyTargetCircuit = conn.NewTargetCircuitBreaker(2, time.Minute)
 	for i := 0; i < 2; i++ {
-		conn, err := tunnel.dialLocalProxyTargetWithRetry("tcp", badTarget, nil)
+		dialedConn, err := tunnel.dialLocalProxyTargetWithRetry("tcp", badTarget, nil)
 		if err == nil {
-			_ = conn.Close()
+			_ = dialedConn.Close()
 			t.Fatalf("expected bad target dial %d to fail", i+1)
 		}
 	}
-	if conn, err := tunnel.dialLocalProxyTargetWithRetry("tcp", badTarget, nil); err == nil {
-		_ = conn.Close()
+	if dialedConn, err := tunnel.dialLocalProxyTargetWithRetry("tcp", badTarget, nil); err == nil {
+		_ = dialedConn.Close()
 		t.Fatal("expected isolated bad target to fail")
-	} else if _, ok := err.(*localProxyTargetCircuitOpenError); !ok {
+	} else if _, ok := err.(*conn.TargetCircuitOpenError); !ok {
 		t.Fatalf("expected circuit open error, got %T: %v", err, err)
 	}
 
@@ -187,19 +187,19 @@ func TestLocalProxyTargetCircuitIsolatesFailingTarget(t *testing.T) {
 		}
 	}()
 
-	conn, err := tunnel.dialLocalProxyTargetWithRetry("tcp", goodListener.Addr().String(), nil)
+	dialedConn, err := tunnel.dialLocalProxyTargetWithRetry("tcp", goodListener.Addr().String(), nil)
 	if err != nil {
 		t.Fatalf("healthy target should not be affected by isolated target: %v", err)
 	}
-	_ = conn.Close()
+	_ = dialedConn.Close()
 	<-done
 }
 
 func TestLocalProxyTargetFastFailRetryAfter(t *testing.T) {
 	retryAfter := 1500 * time.Millisecond
-	got, ok := LocalProxyTargetFastFailRetryAfter(&localProxyTargetCircuitOpenError{
-		target:     "127.0.0.1:8080",
-		retryAfter: retryAfter,
+	got, ok := LocalProxyTargetFastFailRetryAfter(&conn.TargetCircuitOpenError{
+		Target:     "127.0.0.1:8080",
+		RetryAfter: retryAfter,
 	})
 	if !ok {
 		t.Fatal("expected local proxy target fast-fail error")

@@ -24,7 +24,11 @@ import (
 	"ehang.io/nps/lib/crypt"
 )
 
+const defaultTargetCircuitFailureThreshold = 3
+const defaultTargetCircuitOpenDuration = 10 * time.Second
+
 var targetConnectRetrySleep = time.Sleep
+var targetConnectCircuit = conn.NewTargetCircuitBreaker(defaultTargetCircuitFailureThreshold, defaultTargetCircuitOpenDuration)
 
 type TRPClient struct {
 	svrAddr        string
@@ -356,7 +360,20 @@ func dialTargetsWithRetry(connType string, targetHosts []string, timeout time.Du
 	}
 	for attempt := 1; attempt <= attempts; attempt++ {
 		targetHost := targetHosts[(attempt-1)%len(targetHosts)]
+		if circuitErr := targetConnectCircuit.BeforeDial(connType, targetHost); circuitErr != nil {
+			err = circuitErr
+			if allOpen, allOpenErr := targetConnectCircuit.AllOpen(connType, targetHosts); allOpen {
+				if allOpenErr != nil {
+					err = allOpenErr
+				}
+				logs.Warn("target connect skipped, conn type %s, target %s, all candidate targets temporarily isolated, error %s", connType, targetHost, err.Error())
+				return nil, err
+			}
+			logs.Warn("target connect skipped, conn type %s, target %s, temporarily isolated, try next target, error %s", connType, targetHost, err.Error())
+			continue
+		}
 		targetConn, err = net.DialTimeout(connType, targetHost, timeout)
+		targetConnectCircuit.AfterDial(connType, targetHost, err)
 		if err == nil {
 			if attempt > 1 {
 				logs.Info("target connect retry success, conn type %s, target %s, attempt %d/%d", connType, targetHost, attempt, attempts)

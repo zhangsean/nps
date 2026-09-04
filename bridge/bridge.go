@@ -70,28 +70,8 @@ type Bridge struct {
 	targetConnectTimeout       time.Duration
 	targetConnectRetryCount    int
 	targetConnectRetryInterval time.Duration
-	localProxyTargetCircuit    *localProxyTargetCircuitBreaker
+	localProxyTargetCircuit    *conn.TargetCircuitBreaker
 	runtimeConfigMu            sync.RWMutex
-}
-
-type localProxyTargetCircuitState struct {
-	failures  int
-	openUntil time.Time
-	lastError string
-}
-
-type localProxyTargetCircuitBreaker struct {
-	mu           sync.Mutex
-	states       map[string]*localProxyTargetCircuitState
-	threshold    int
-	openDuration time.Duration
-	now          func() time.Time
-}
-
-type localProxyTargetCircuitOpenError struct {
-	target     string
-	retryAfter time.Duration
-	lastError  string
 }
 
 type RuntimeConfig struct {
@@ -146,7 +126,7 @@ func NewTunnel(tunnelPort int, tunnelType string, ipVerify bool, runList *sync.M
 		targetConnectTimeout:       runtimeConfig.TargetConnectTimeout,
 		targetConnectRetryCount:    runtimeConfig.TargetConnectRetryCount,
 		targetConnectRetryInterval: runtimeConfig.TargetConnectRetryInterval,
-		localProxyTargetCircuit:    newLocalProxyTargetCircuitBreaker(defaultLocalProxyTargetCircuitFailureThreshold, defaultLocalProxyTargetCircuitOpenDuration),
+		localProxyTargetCircuit:    conn.NewTargetCircuitBreaker(defaultLocalProxyTargetCircuitFailureThreshold, defaultLocalProxyTargetCircuitOpenDuration),
 	}
 }
 
@@ -190,29 +170,10 @@ func (s *Bridge) TargetConnectRetryInterval() time.Duration {
 }
 
 func LocalProxyTargetFastFailRetryAfter(err error) (time.Duration, bool) {
-	var fastFailErr *localProxyTargetCircuitOpenError
-	if errors.As(err, &fastFailErr) {
-		return fastFailErr.retryAfter, true
-	}
-	return 0, false
+	return conn.TargetFastFailRetryAfter(err)
 }
 
-func newLocalProxyTargetCircuitBreaker(threshold int, openDuration time.Duration) *localProxyTargetCircuitBreaker {
-	if threshold < 1 {
-		threshold = 1
-	}
-	if openDuration < 0 {
-		openDuration = 0
-	}
-	return &localProxyTargetCircuitBreaker{
-		states:       make(map[string]*localProxyTargetCircuitState),
-		threshold:    threshold,
-		openDuration: openDuration,
-		now:          time.Now,
-	}
-}
-
-func (s *Bridge) localProxyCircuitBreaker() *localProxyTargetCircuitBreaker {
+func (s *Bridge) localProxyCircuitBreaker() *conn.TargetCircuitBreaker {
 	if s == nil {
 		return nil
 	}
@@ -221,88 +182,11 @@ func (s *Bridge) localProxyCircuitBreaker() *localProxyTargetCircuitBreaker {
 	}
 	s.runtimeConfigMu.Lock()
 	if s.localProxyTargetCircuit == nil {
-		s.localProxyTargetCircuit = newLocalProxyTargetCircuitBreaker(defaultLocalProxyTargetCircuitFailureThreshold, defaultLocalProxyTargetCircuitOpenDuration)
+		s.localProxyTargetCircuit = conn.NewTargetCircuitBreaker(defaultLocalProxyTargetCircuitFailureThreshold, defaultLocalProxyTargetCircuitOpenDuration)
 	}
 	breaker := s.localProxyTargetCircuit
 	s.runtimeConfigMu.Unlock()
 	return breaker
-}
-
-func (b *localProxyTargetCircuitBreaker) beforeDial(connType string, targetHost string) error {
-	if b == nil {
-		return nil
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	state := b.states[localProxyTargetCircuitKey(connType, targetHost)]
-	if state == nil || state.openUntil.IsZero() {
-		return nil
-	}
-	now := b.now()
-	if !state.openUntil.After(now) {
-		state.failures = 0
-		state.openUntil = time.Time{}
-		state.lastError = ""
-		return nil
-	}
-	return &localProxyTargetCircuitOpenError{
-		target:     targetHost,
-		retryAfter: state.openUntil.Sub(now),
-		lastError:  state.lastError,
-	}
-}
-
-func (b *localProxyTargetCircuitBreaker) afterDial(connType string, targetHost string, err error) {
-	if b == nil {
-		return
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	key := localProxyTargetCircuitKey(connType, targetHost)
-	if err == nil {
-		delete(b.states, key)
-		return
-	}
-	state := b.states[key]
-	if state == nil {
-		state = &localProxyTargetCircuitState{}
-		b.states[key] = state
-	}
-	state.failures++
-	state.lastError = err.Error()
-	if state.failures >= b.threshold {
-		state.openUntil = b.now().Add(b.openDuration)
-	}
-}
-
-func (b *localProxyTargetCircuitBreaker) allOpen(connType string, targetHosts []string) (bool, error) {
-	if b == nil || len(targetHosts) == 0 {
-		return false, nil
-	}
-	var lastErr error
-	for _, targetHost := range targetHosts {
-		err := b.beforeDial(connType, targetHost)
-		if err == nil {
-			return false, nil
-		}
-		lastErr = err
-	}
-	return true, lastErr
-}
-
-func (e *localProxyTargetCircuitOpenError) Error() string {
-	message := fmt.Sprintf("local proxy target %s temporarily isolated after repeated connect failures", e.target)
-	if e.retryAfter > 0 {
-		message += fmt.Sprintf(", retry after %s", e.retryAfter.Round(time.Millisecond))
-	}
-	if e.lastError != "" {
-		message += ": " + e.lastError
-	}
-	return message
-}
-
-func localProxyTargetCircuitKey(connType string, targetHost string) string {
-	return connType + "\x00" + targetHost
 }
 
 func (s *Bridge) StartTunnel() error {
@@ -654,9 +538,9 @@ func (s *Bridge) dialLocalProxyTargetsWithRetry(connType string, targetHosts []s
 	}
 	for attempt := 1; attempt <= attempts; attempt++ {
 		targetHost := targetHosts[(attempt-1)%len(targetHosts)]
-		if circuitErr := circuitBreaker.beforeDial(connType, targetHost); circuitErr != nil {
+		if circuitErr := circuitBreaker.BeforeDial(connType, targetHost); circuitErr != nil {
 			err = circuitErr
-			if allOpen, allOpenErr := circuitBreaker.allOpen(connType, targetHosts); allOpen {
+			if allOpen, allOpenErr := circuitBreaker.AllOpen(connType, targetHosts); allOpen {
 				if allOpenErr != nil {
 					err = allOpenErr
 				}
@@ -667,7 +551,7 @@ func (s *Bridge) dialLocalProxyTargetsWithRetry(connType string, targetHosts []s
 			continue
 		}
 		target, err = net.DialTimeout(connType, targetHost, runtimeConfig.TargetConnectTimeout)
-		circuitBreaker.afterDial(connType, targetHost, err)
+		circuitBreaker.AfterDial(connType, targetHost, err)
 		if err == nil {
 			if attempt > 1 {
 				logs.Info("local proxy target connect retry success, conn type %s, target %s, attempt %d/%d", connType, targetHost, attempt, attempts)

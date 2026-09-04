@@ -26,6 +26,7 @@ https://natnps.com/
 
 ## 更新日志
 - 2026-08-14  v0.27.27
+  - **优化**：目标连接连续失败的短暂隔离策略扩展到 nps LocalProxy 和 npc 出口拨号，覆盖 TCP、HTTP、HTTPS passthrough、SOCKS5 和 UDP 等转发场景，避免任一协议下的单个异常后端拖垮其他正常服务。
   - **优化**：nps LocalProxy 目标被短暂隔离后，HTTP 502 错误页面展示 `Fast fail: retry in x seconds`，便于区分真实拨号失败和熔断快速失败。
   - **修复**：nps LocalProxy 按目标地址记录连续连接失败并短暂隔离异常 target，避免单个后端不可达时大量 `DialTimeout` 和重试占满进程资源，导致其他正常域名转发被连带拖成 502。
   - **修复**：限速器按令牌桶容量分段消费超大单次读写，避免 HTTP 代理大请求体一次性写入超过默认桶上限后永久等待，导致请求 goroutine 持续持有整包缓冲并推高内存。
