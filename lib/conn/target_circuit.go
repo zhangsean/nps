@@ -9,17 +9,20 @@ import (
 )
 
 type TargetCircuitState struct {
-	failures  int
-	openUntil time.Time
-	lastError string
+	failures      int
+	openUntil     time.Time
+	lastError     string
+	openDuration  time.Duration
+	probeInFlight bool
 }
 
 type TargetCircuitBreaker struct {
-	mu           sync.Mutex
-	states       map[string]*TargetCircuitState
-	threshold    int
-	openDuration time.Duration
-	now          func() time.Time
+	mu                  sync.Mutex
+	states              map[string]*TargetCircuitState
+	threshold           int
+	initialOpenDuration time.Duration
+	maxOpenDuration     time.Duration
+	now                 func() time.Time
 }
 
 type TargetCircuitOpenError struct {
@@ -28,18 +31,26 @@ type TargetCircuitOpenError struct {
 	LastError  string
 }
 
-func NewTargetCircuitBreaker(threshold int, openDuration time.Duration) *TargetCircuitBreaker {
+func NewTargetCircuitBreaker(threshold int, initialOpenDuration time.Duration, maxOpenDuration ...time.Duration) *TargetCircuitBreaker {
 	if threshold < 1 {
 		threshold = 1
 	}
-	if openDuration < 0 {
-		openDuration = 0
+	if initialOpenDuration < 0 {
+		initialOpenDuration = 0
+	}
+	maxDuration := initialOpenDuration
+	if len(maxOpenDuration) > 0 {
+		maxDuration = maxOpenDuration[0]
+	}
+	if maxDuration < initialOpenDuration {
+		maxDuration = initialOpenDuration
 	}
 	return &TargetCircuitBreaker{
-		states:       make(map[string]*TargetCircuitState),
-		threshold:    threshold,
-		openDuration: openDuration,
-		now:          time.Now,
+		states:              make(map[string]*TargetCircuitState),
+		threshold:           threshold,
+		initialOpenDuration: initialOpenDuration,
+		maxOpenDuration:     maxDuration,
+		now:                 time.Now,
 	}
 }
 
@@ -50,14 +61,23 @@ func (b *TargetCircuitBreaker) BeforeDial(connType string, targetHost string) er
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	state := b.states[targetCircuitKey(connType, targetHost)]
-	if state == nil || state.openUntil.IsZero() {
+	if state == nil {
+		return nil
+	}
+	if state.probeInFlight {
+		return &TargetCircuitOpenError{
+			Target:     targetHost,
+			RetryAfter: time.Millisecond,
+			LastError:  state.lastError,
+		}
+	}
+	if state.openUntil.IsZero() {
 		return nil
 	}
 	now := b.now()
 	if !state.openUntil.After(now) {
-		state.failures = 0
 		state.openUntil = time.Time{}
-		state.lastError = ""
+		state.probeInFlight = true
 		return nil
 	}
 	return &TargetCircuitOpenError{
@@ -78,15 +98,23 @@ func (b *TargetCircuitBreaker) AfterDial(connType string, targetHost string, err
 		delete(b.states, key)
 		return
 	}
+	now := b.now()
 	state := b.states[key]
 	if state == nil {
 		state = &TargetCircuitState{}
 		b.states[key] = state
 	}
+	if state.openUntil.After(now) && !state.probeInFlight {
+		state.lastError = err.Error()
+		return
+	}
+	state.probeInFlight = false
 	state.failures++
 	state.lastError = err.Error()
 	if state.failures >= b.threshold {
-		state.openUntil = b.now().Add(b.openDuration)
+		duration := state.nextOpenDuration(b.initialOpenDuration, b.maxOpenDuration)
+		state.openDuration = duration
+		state.openUntil = now.Add(duration)
 	}
 }
 
@@ -130,4 +158,18 @@ func TargetFastFailRetryAfter(err error) (time.Duration, bool) {
 
 func targetCircuitKey(connType string, targetHost string) string {
 	return connType + "\x00" + targetHost
+}
+
+func (s *TargetCircuitState) nextOpenDuration(initialDuration time.Duration, maxDuration time.Duration) time.Duration {
+	if s.openDuration <= 0 {
+		return initialDuration
+	}
+	next := s.openDuration * 2
+	if next < s.openDuration {
+		next = maxDuration
+	}
+	if next > maxDuration {
+		next = maxDuration
+	}
+	return next
 }

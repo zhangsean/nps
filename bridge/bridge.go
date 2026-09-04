@@ -33,7 +33,8 @@ const defaultClientConnectTimeout = 2 * time.Second
 const defaultTargetConnectTimeout = 2 * time.Second
 const defaultTargetConnectRetryCount = 2
 const defaultLocalProxyTargetCircuitFailureThreshold = 3
-const defaultLocalProxyTargetCircuitOpenDuration = 10 * time.Second
+const defaultLocalProxyTargetCircuitInitialOpenDuration = 5 * time.Second
+const defaultLocalProxyTargetCircuitMaxOpenDuration = 30 * time.Second
 
 var targetConnectRetrySleep = time.Sleep
 
@@ -126,7 +127,7 @@ func NewTunnel(tunnelPort int, tunnelType string, ipVerify bool, runList *sync.M
 		targetConnectTimeout:       runtimeConfig.TargetConnectTimeout,
 		targetConnectRetryCount:    runtimeConfig.TargetConnectRetryCount,
 		targetConnectRetryInterval: runtimeConfig.TargetConnectRetryInterval,
-		localProxyTargetCircuit:    conn.NewTargetCircuitBreaker(defaultLocalProxyTargetCircuitFailureThreshold, defaultLocalProxyTargetCircuitOpenDuration),
+		localProxyTargetCircuit:    conn.NewTargetCircuitBreaker(defaultLocalProxyTargetCircuitFailureThreshold, defaultLocalProxyTargetCircuitInitialOpenDuration, defaultLocalProxyTargetCircuitMaxOpenDuration),
 	}
 }
 
@@ -182,7 +183,7 @@ func (s *Bridge) localProxyCircuitBreaker() *conn.TargetCircuitBreaker {
 	}
 	s.runtimeConfigMu.Lock()
 	if s.localProxyTargetCircuit == nil {
-		s.localProxyTargetCircuit = conn.NewTargetCircuitBreaker(defaultLocalProxyTargetCircuitFailureThreshold, defaultLocalProxyTargetCircuitOpenDuration)
+		s.localProxyTargetCircuit = conn.NewTargetCircuitBreaker(defaultLocalProxyTargetCircuitFailureThreshold, defaultLocalProxyTargetCircuitInitialOpenDuration, defaultLocalProxyTargetCircuitMaxOpenDuration)
 	}
 	breaker := s.localProxyTargetCircuit
 	s.runtimeConfigMu.Unlock()

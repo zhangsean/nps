@@ -25,10 +25,11 @@ import (
 )
 
 const defaultTargetCircuitFailureThreshold = 3
-const defaultTargetCircuitOpenDuration = 10 * time.Second
+const defaultTargetCircuitInitialOpenDuration = 5 * time.Second
+const defaultTargetCircuitMaxOpenDuration = 30 * time.Second
 
 var targetConnectRetrySleep = time.Sleep
-var targetConnectCircuit = conn.NewTargetCircuitBreaker(defaultTargetCircuitFailureThreshold, defaultTargetCircuitOpenDuration)
+var targetConnectCircuit = conn.NewTargetCircuitBreaker(defaultTargetCircuitFailureThreshold, defaultTargetCircuitInitialOpenDuration, defaultTargetCircuitMaxOpenDuration)
 
 type TRPClient struct {
 	svrAddr        string
