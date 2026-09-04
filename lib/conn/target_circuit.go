@@ -8,18 +8,22 @@ import (
 	"time"
 )
 
+const defaultTargetCircuitFailureWindow = 10 * time.Second
+
 type TargetCircuitState struct {
-	failures      int
-	openUntil     time.Time
-	lastError     string
-	openDuration  time.Duration
-	probeInFlight bool
+	failures           int
+	failureWindowStart time.Time
+	openUntil          time.Time
+	lastError          string
+	openDuration       time.Duration
+	probeInFlight      bool
 }
 
 type TargetCircuitBreaker struct {
 	mu                  sync.Mutex
 	states              map[string]*TargetCircuitState
 	threshold           int
+	failureWindow       time.Duration
 	initialOpenDuration time.Duration
 	maxOpenDuration     time.Duration
 	now                 func() time.Time
@@ -48,6 +52,7 @@ func NewTargetCircuitBreaker(threshold int, initialOpenDuration time.Duration, m
 	return &TargetCircuitBreaker{
 		states:              make(map[string]*TargetCircuitState),
 		threshold:           threshold,
+		failureWindow:       defaultTargetCircuitFailureWindow,
 		initialOpenDuration: initialOpenDuration,
 		maxOpenDuration:     maxDuration,
 		now:                 time.Now,
@@ -65,11 +70,7 @@ func (b *TargetCircuitBreaker) BeforeDial(connType string, targetHost string) er
 		return nil
 	}
 	if state.probeInFlight {
-		return &TargetCircuitOpenError{
-			Target:     targetHost,
-			RetryAfter: time.Millisecond,
-			LastError:  state.lastError,
-		}
+		return state.openError(targetHost, time.Millisecond)
 	}
 	if state.openUntil.IsZero() {
 		return nil
@@ -109,6 +110,14 @@ func (b *TargetCircuitBreaker) AfterDial(connType string, targetHost string, err
 		return
 	}
 	state.probeInFlight = false
+	if state.openDuration <= 0 {
+		if state.failures == 0 || state.failureWindowStart.IsZero() {
+			state.failureWindowStart = now
+		} else if b.failureWindow > 0 && now.Sub(state.failureWindowStart) > b.failureWindow {
+			state.failures = 0
+			state.failureWindowStart = now
+		}
+	}
 	state.failures++
 	state.lastError = err.Error()
 	if state.failures >= b.threshold {
@@ -122,13 +131,23 @@ func (b *TargetCircuitBreaker) AllOpen(connType string, targetHosts []string) (b
 	if b == nil || len(targetHosts) == 0 {
 		return false, nil
 	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	now := b.now()
 	var lastErr error
 	for _, targetHost := range targetHosts {
-		err := b.BeforeDial(connType, targetHost)
-		if err == nil {
+		state := b.states[targetCircuitKey(connType, targetHost)]
+		if state == nil {
 			return false, nil
 		}
-		lastErr = err
+		if state.probeInFlight {
+			lastErr = state.openError(targetHost, time.Millisecond)
+			continue
+		}
+		if state.openUntil.IsZero() || !state.openUntil.After(now) {
+			return false, nil
+		}
+		lastErr = state.openError(targetHost, state.openUntil.Sub(now))
 	}
 	return true, lastErr
 }
@@ -172,4 +191,12 @@ func (s *TargetCircuitState) nextOpenDuration(initialDuration time.Duration, max
 		next = maxDuration
 	}
 	return next
+}
+
+func (s *TargetCircuitState) openError(targetHost string, retryAfter time.Duration) *TargetCircuitOpenError {
+	return &TargetCircuitOpenError{
+		Target:     targetHost,
+		RetryAfter: retryAfter,
+		LastError:  s.lastError,
+	}
 }

@@ -52,6 +52,46 @@ func TestTargetCircuitBreakerAdaptiveOpenDuration(t *testing.T) {
 	assertTargetFastFailRetryAfter(t, breaker, "127.0.0.1:8080", 30*time.Second)
 }
 
+func TestTargetCircuitBreakerFailureWindow(t *testing.T) {
+	now := time.Date(2026, 9, 4, 11, 0, 0, 0, time.Local)
+	breaker := NewTargetCircuitBreaker(3, 5*time.Second, 30*time.Second)
+	breaker.now = func() time.Time {
+		return now
+	}
+
+	breaker.AfterDial("tcp", "127.0.0.1:8080", errors.New("connection refused"))
+	now = now.Add(11 * time.Second)
+	breaker.AfterDial("tcp", "127.0.0.1:8080", errors.New("connection refused"))
+	now = now.Add(time.Second)
+	breaker.AfterDial("tcp", "127.0.0.1:8080", errors.New("connection refused"))
+	if err := breaker.BeforeDial("tcp", "127.0.0.1:8080"); err != nil {
+		t.Fatalf("failures older than the 10-second window should not open the circuit: %v", err)
+	}
+
+	now = now.Add(time.Second)
+	breaker.AfterDial("tcp", "127.0.0.1:8080", errors.New("connection refused"))
+	assertTargetFastFailRetryAfter(t, breaker, "127.0.0.1:8080", 5*time.Second)
+}
+
+func TestTargetCircuitBreakerAllOpenDoesNotConsumeHalfOpenProbe(t *testing.T) {
+	now := time.Date(2026, 9, 4, 11, 0, 0, 0, time.Local)
+	breaker := NewTargetCircuitBreaker(1, 5*time.Second, 30*time.Second)
+	breaker.now = func() time.Time {
+		return now
+	}
+
+	breaker.AfterDial("tcp", "127.0.0.1:8080", errors.New("connection refused"))
+	now = now.Add(5*time.Second + time.Millisecond)
+
+	allOpen, err := breaker.AllOpen("tcp", []string{"127.0.0.1:8080"})
+	if allOpen || err != nil {
+		t.Fatalf("expired open window should not be considered all-open, allOpen=%t err=%v", allOpen, err)
+	}
+	if err := breaker.BeforeDial("tcp", "127.0.0.1:8080"); err != nil {
+		t.Fatalf("all-open check should not consume the half-open probe: %v", err)
+	}
+}
+
 func TestTargetCircuitBreakerClosesOnHalfOpenSuccess(t *testing.T) {
 	now := time.Date(2026, 9, 4, 11, 0, 0, 0, time.Local)
 	breaker := NewTargetCircuitBreaker(1, 5*time.Second, 30*time.Second)
