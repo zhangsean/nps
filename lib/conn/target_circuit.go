@@ -88,16 +88,16 @@ func (b *TargetCircuitBreaker) BeforeDial(connType string, targetHost string) er
 	}
 }
 
-func (b *TargetCircuitBreaker) AfterDial(connType string, targetHost string, err error) {
+func (b *TargetCircuitBreaker) AfterDial(connType string, targetHost string, err error) *TargetCircuitOpenError {
 	if b == nil {
-		return
+		return nil
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	key := targetCircuitKey(connType, targetHost)
 	if err == nil {
 		delete(b.states, key)
-		return
+		return nil
 	}
 	now := b.now()
 	state := b.states[key]
@@ -107,7 +107,7 @@ func (b *TargetCircuitBreaker) AfterDial(connType string, targetHost string, err
 	}
 	if state.openUntil.After(now) && !state.probeInFlight {
 		state.lastError = err.Error()
-		return
+		return nil
 	}
 	state.probeInFlight = false
 	if state.openDuration <= 0 {
@@ -124,7 +124,9 @@ func (b *TargetCircuitBreaker) AfterDial(connType string, targetHost string, err
 		duration := state.nextOpenDuration(b.initialOpenDuration, b.maxOpenDuration)
 		state.openDuration = duration
 		state.openUntil = now.Add(duration)
+		return state.openError(targetHost, duration)
 	}
+	return nil
 }
 
 func (b *TargetCircuitBreaker) AllOpen(connType string, targetHosts []string) (bool, error) {

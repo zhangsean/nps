@@ -545,14 +545,16 @@ func (s *Bridge) dialLocalProxyTargetsWithRetry(connType string, targetHosts []s
 				if allOpenErr != nil {
 					err = allOpenErr
 				}
-				logs.Warn("local proxy target connect skipped, conn type %s, target %s, all candidate targets temporarily isolated, error %s", connType, targetHost, err.Error())
+				logs.Trace("local proxy target connect fast-failed, conn type %s, target %s, all candidate targets temporarily isolated", connType, targetHost)
 				return nil, err
 			}
-			logs.Warn("local proxy target connect skipped, conn type %s, target %s, temporarily isolated, try next target, error %s", connType, targetHost, err.Error())
+			logs.Trace("local proxy target connect fast-failed, conn type %s, target %s, temporarily isolated, try next target", connType, targetHost)
 			continue
 		}
 		target, err = net.DialTimeout(connType, targetHost, runtimeConfig.TargetConnectTimeout)
-		circuitBreaker.AfterDial(connType, targetHost, err)
+		if openErr := circuitBreaker.AfterDial(connType, targetHost, err); openErr != nil {
+			logs.Warn("local proxy target temporarily isolated, conn type %s, target %s, isolated for %s after repeated connect failures, error %s", connType, targetHost, openErr.RetryAfter.Round(time.Millisecond), err.Error())
+		}
 		if err == nil {
 			if attempt > 1 {
 				logs.Info("local proxy target connect retry success, conn type %s, target %s, attempt %d/%d", connType, targetHost, attempt, attempts)

@@ -338,7 +338,11 @@ func (s *TRPClient) handleChan(src net.Conn) {
 	}
 	//connect to target if conn type is tcp or udp
 	if targetConn, err := dialTargetsWithRetry(lk.ConnType, lk.TargetHosts, lk.Option.Timeout, lk.Option.RetryCount, lk.Option.RetryInterval); err != nil {
-		logs.Warn("connect to %s error %s", lk.Host, err.Error())
+		if _, ok := conn.TargetFastFailRetryAfter(err); ok {
+			logs.Trace("connect to %s fast-failed while target is temporarily isolated", lk.Host)
+		} else {
+			logs.Warn("connect to %s error %s", lk.Host, err.Error())
+		}
 		src.Close()
 	} else {
 		logs.Trace("new %s connection with the goal of %s, remote address:%s", lk.ConnType, lk.Host, lk.RemoteAddr)
@@ -367,14 +371,16 @@ func dialTargetsWithRetry(connType string, targetHosts []string, timeout time.Du
 				if allOpenErr != nil {
 					err = allOpenErr
 				}
-				logs.Warn("target connect skipped, conn type %s, target %s, all candidate targets temporarily isolated, error %s", connType, targetHost, err.Error())
+				logs.Trace("target connect fast-failed, conn type %s, target %s, all candidate targets temporarily isolated", connType, targetHost)
 				return nil, err
 			}
-			logs.Warn("target connect skipped, conn type %s, target %s, temporarily isolated, try next target, error %s", connType, targetHost, err.Error())
+			logs.Trace("target connect fast-failed, conn type %s, target %s, temporarily isolated, try next target", connType, targetHost)
 			continue
 		}
 		targetConn, err = net.DialTimeout(connType, targetHost, timeout)
-		targetConnectCircuit.AfterDial(connType, targetHost, err)
+		if openErr := targetConnectCircuit.AfterDial(connType, targetHost, err); openErr != nil {
+			logs.Warn("target temporarily isolated, conn type %s, target %s, isolated for %s after repeated connect failures, error %s", connType, targetHost, openErr.RetryAfter.Round(time.Millisecond), err.Error())
+		}
 		if err == nil {
 			if attempt > 1 {
 				logs.Info("target connect retry success, conn type %s, target %s, attempt %d/%d", connType, targetHost, attempt, attempts)

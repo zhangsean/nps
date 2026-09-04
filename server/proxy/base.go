@@ -248,7 +248,11 @@ func (s *BaseServer) DealClient(c *conn.Conn, client *file.Client, addr string,
 		link.SetTargetConnectRetryHook(retryHooks[0])
 	}
 	if target, err := s.bridge.SendLinkInfo(client.Id, link, s.task); err != nil {
-		logs.Warn("get connection from client id %d  error %s", client.Id, err.Error())
+		if _, ok := bridge.LocalProxyTargetFastFailRetryAfter(err); ok {
+			logs.Trace("get connection from client id %d fast-failed while target is temporarily isolated", client.Id)
+		} else {
+			logs.Warn("get connection from client id %d  error %s", client.Id, err.Error())
+		}
 		c.Close()
 		return err
 	} else {
