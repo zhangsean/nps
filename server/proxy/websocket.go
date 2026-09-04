@@ -141,7 +141,13 @@ func WebSocketHttpReverseProxy(s *httpServer) *HttpReverseProxy {
 					accessLog.SetPhase(httpAccessLogPhaseTargetConnect)
 					accessLog.AddPhaseDuration(httpAccessLogPhaseTargetConnect, time.Since(targetConnectStart))
 					accessLog.SetStatusCode(http.StatusBadGateway)
-					logs.Notice("connect to target %s error %s", lk.Host, err)
+					accessLog.SetErrorDetails(err)
+					accessLog.Finish(upstreamUnavailableAccessLogErrorText(err, 1))
+					if _, ok := conn.TargetFastFailRetryAfter(err); ok {
+						logs.Trace("connect to target %s fast-failed while target is temporarily isolated", lk.Host)
+					} else {
+						logs.Notice("connect to target %s error %s", lk.Host, err)
+					}
 					return nil, NewHTTPError(http.StatusBadGateway, "Cannot connect to the server")
 				}
 				accessLog.AddPhaseDuration(httpAccessLogPhaseTargetConnect, time.Since(targetConnectStart))
@@ -193,7 +199,13 @@ func WebSocketHttpReverseProxy(s *httpServer) *HttpReverseProxy {
 			accessLog.SetPhase(httpAccessLogPhaseTargetConnect)
 			accessLog.AddPhaseDuration(httpAccessLogPhaseTargetConnect, time.Since(targetConnectStart))
 			accessLog.SetStatusCode(http.StatusBadGateway)
-			logs.Notice("connect to target %s error %s", lk.Host, err)
+			accessLog.SetErrorDetails(err)
+			accessLog.Finish(upstreamUnavailableAccessLogErrorText(err, 1))
+			if _, ok := conn.TargetFastFailRetryAfter(err); ok {
+				logs.Trace("connect to target %s fast-failed while target is temporarily isolated", lk.Host)
+			} else {
+				logs.Notice("connect to target %s error %s", lk.Host, err)
+			}
 			return nil, NewHTTPError(http.StatusBadGateway, "Cannot connect to the target")
 		}
 		accessLog.AddPhaseDuration(httpAccessLogPhaseTargetConnect, time.Since(targetConnectStart))

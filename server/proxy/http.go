@@ -442,9 +442,10 @@ func (s *httpServer) finishHTTPUpstreamError(c *conn.Conn, accessLog *httpAccess
 	accessLog.SetPhase(phase)
 	accessLog.SetStatusCode(statusCode)
 	fastFailText := upstreamFastFailText(err)
+	accessLog.SetErrorDetails(err)
 	accessLog.SetResponseBytes(s.httpUpstreamErrorResponseBytes(statusCode, targetAddr, fastFailText))
 	if phase == httpAccessLogPhaseTargetConnect {
-		accessLog.Finish(upstreamUnavailableErrorText(err, attempts))
+		accessLog.Finish(upstreamUnavailableAccessLogErrorText(err, attempts))
 	} else if isRetryableUpstreamDisconnect(err) {
 		accessLog.Finish(upstreamDisconnectedFinalErrorText(phase, err, attempts))
 	} else if err != nil {
@@ -613,6 +614,13 @@ func upstreamUnavailableErrorText(err error, attempts int) string {
 		return "upstream unavailable after " + strconv.Itoa(attempts) + " attempts"
 	}
 	return "upstream unavailable after " + strconv.Itoa(attempts) + " attempts: " + err.Error()
+}
+
+func upstreamUnavailableAccessLogErrorText(err error, attempts int) string {
+	if errText, ok := targetFastFailAccessLogErrorText(err); ok {
+		return "upstream unavailable after " + strconv.Itoa(attempts) + " attempts: " + errText
+	}
+	return upstreamUnavailableErrorText(err, attempts)
 }
 
 func resetReqMethod(method string) string {

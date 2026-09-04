@@ -390,6 +390,57 @@ func TestBuildHTTPAccessLogLineWithUpstreamRetryEvent(t *testing.T) {
 	}
 }
 
+func TestHTTPAccessLogTargetFastFailFields(t *testing.T) {
+	oldDisabled := httpAccessLog.disabled
+	httpAccessLog.disabled = true
+	t.Cleanup(func() {
+		httpAccessLog.disabled = oldDisabled
+	})
+
+	record := &httpAccessLogRecord{
+		entry: httpAccessLogEntry{
+			Timestamp:  "2026-09-04 14:05:00.000",
+			Method:     http.MethodGet,
+			URL:        "/api",
+			DurationMS: 1,
+		},
+		start: time.Now(),
+	}
+	fastFailErr := &conn.TargetCircuitOpenError{
+		Target:     "192.168.1.25:3309",
+		RetryAfter: 6372 * time.Millisecond,
+		LastError:  "dial tcp 192.168.1.25:3309: i/o timeout",
+	}
+	record.SetPhase(httpAccessLogPhaseTargetConnect)
+	record.SetErrorDetails(fastFailErr)
+	record.Finish(upstreamUnavailableAccessLogErrorText(fastFailErr, 3))
+
+	if record.entry.ErrorType != httpAccessLogErrorTypeTargetFastFail {
+		t.Fatalf("unexpected error type %q", record.entry.ErrorType)
+	}
+	if record.entry.RetryAfterMS != 6372 {
+		t.Fatalf("unexpected retry after %d", record.entry.RetryAfterMS)
+	}
+	if strings.Contains(record.entry.Error, "retry after") {
+		t.Fatalf("access log error should not contain countdown text: %q", record.entry.Error)
+	}
+	if !strings.Contains(record.entry.Error, "temporarily isolated after repeated connect failures") {
+		t.Fatalf("access log error missing fast-fail reason: %q", record.entry.Error)
+	}
+
+	line, err := buildHTTPAccessLogLine(record.entry)
+	if err != nil {
+		t.Fatalf("build log line error: %v", err)
+	}
+	var got httpAccessLogEntry
+	if err := json.Unmarshal(line, &got); err != nil {
+		t.Fatalf("log line is not json: %v", err)
+	}
+	if got.ErrorType != httpAccessLogErrorTypeTargetFastFail || got.RetryAfterMS != 6372 || got.Target != "192.168.1.25:3309" {
+		t.Fatalf("unexpected fast-fail log fields: %+v", got)
+	}
+}
+
 func TestNewHttpUpstreamResponseTimeout(t *testing.T) {
 	previous := UpstreamResponseTimeout()
 	t.Cleanup(func() { SetUpstreamResponseTimeout(previous) })

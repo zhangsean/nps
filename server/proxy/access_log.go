@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -52,6 +53,7 @@ type httpAccessLogEntry struct {
 	RetryAttempt     int    `json:"retry_attempt,omitempty"`
 	RetryAttempts    int    `json:"retry_attempts,omitempty"`
 	RetryDelayMS     int64  `json:"retry_delay_ms,omitempty"`
+	RetryAfterMS     int64  `json:"retry_after_ms,omitempty"`
 }
 
 const (
@@ -66,6 +68,8 @@ const (
 	httpAccessLogPhaseComplete       = "complete"
 	httpAccessLogPhaseUnknown        = "unknown"
 )
+
+const httpAccessLogErrorTypeTargetFastFail = "target_fast_fail"
 
 type httpAccessLogRecord struct {
 	entry httpAccessLogEntry
@@ -180,6 +184,25 @@ func (record *httpAccessLogRecord) SetPhase(phase string) {
 	}
 }
 
+func (record *httpAccessLogRecord) SetErrorDetails(err error) {
+	if record == nil || err == nil {
+		return
+	}
+	var circuitErr *npsconn.TargetCircuitOpenError
+	if !errors.As(err, &circuitErr) {
+		return
+	}
+	record.entry.ErrorType = httpAccessLogErrorTypeTargetFastFail
+	retryAfter := circuitErr.RetryAfter
+	if retryAfter < 0 {
+		retryAfter = 0
+	}
+	record.entry.RetryAfterMS = retryAfter.Milliseconds()
+	if target := strings.TrimSpace(circuitErr.Target); target != "" {
+		record.entry.Target = target
+	}
+}
+
 func (record *httpAccessLogRecord) AddPhaseDuration(phase string, d time.Duration) {
 	if record == nil || d < 0 {
 		return
@@ -253,7 +276,9 @@ func (record *httpAccessLogRecord) Finish(errText string) {
 		if errText != "" && record.entry.Phase == "" {
 			record.entry.Phase = httpAccessLogPhaseUnknown
 		}
-		record.entry.ErrorType = classifyHTTPAccessLogRecordError(record)
+		if record.entry.ErrorType == "" {
+			record.entry.ErrorType = classifyHTTPAccessLogRecordError(record)
+		}
 		record.entry.SlowestPhase, record.entry.SlowestPhaseMS = slowestHTTPAccessLogPhase(record.entry)
 		if shouldSkipHTTPAccessLog(record) {
 			return
@@ -352,6 +377,7 @@ func buildHTTPAccessLogLine(entry httpAccessLogEntry) ([]byte, error) {
 	add("retry_attempt", entry.RetryAttempt, false)
 	add("retry_attempts", entry.RetryAttempts, false)
 	add("retry_delay_ms", entry.RetryDelayMS, false)
+	add("retry_after_ms", entry.RetryAfterMS, false)
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -614,6 +640,8 @@ func classifyHTTPAccessLogError(errText string) string {
 	}
 	lower := strings.ToLower(errText)
 	switch {
+	case strings.Contains(lower, "temporarily isolated after repeated connect failures"):
+		return httpAccessLogErrorTypeTargetFastFail
 	case strings.Contains(lower, "upstream disconnected"):
 		return "upstream_disconnected"
 	case strings.Contains(lower, "upstream unavailable"):
@@ -650,6 +678,22 @@ func classifyHTTPAccessLogRecordError(record *httpAccessLogRecord) string {
 		return "host_not_matched"
 	}
 	return errorType
+}
+
+func targetFastFailAccessLogErrorText(err error) (string, bool) {
+	var circuitErr *npsconn.TargetCircuitOpenError
+	if !errors.As(err, &circuitErr) {
+		return "", false
+	}
+	target := strings.TrimSpace(circuitErr.Target)
+	if target == "" {
+		target = "unknown"
+	}
+	message := "target " + target + " temporarily isolated after repeated connect failures"
+	if circuitErr.LastError != "" {
+		message += ": " + circuitErr.LastError
+	}
+	return message, true
 }
 
 func parseHTTPAccessLogSet(s string) map[string]struct{} {
