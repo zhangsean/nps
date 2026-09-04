@@ -463,7 +463,7 @@ func upstreamFastFailText(err error) string {
 	if retryAfter < 0 {
 		retryAfter = 0
 	}
-	return fmt.Sprintf("Fast fail in %.1f seconds", retryAfter.Seconds())
+	return fmt.Sprintf("Fast fail: retry in %.1f seconds", retryAfter.Seconds())
 }
 
 type upstreamRetryConfigProvider interface {
