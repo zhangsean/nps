@@ -189,6 +189,14 @@ func (s *Bridge) TargetConnectRetryInterval() time.Duration {
 	return s.RuntimeConfig().TargetConnectRetryInterval
 }
 
+func LocalProxyTargetFastFailRetryAfter(err error) (time.Duration, bool) {
+	var fastFailErr *localProxyTargetCircuitOpenError
+	if errors.As(err, &fastFailErr) {
+		return fastFailErr.retryAfter, true
+	}
+	return 0, false
+}
+
 func newLocalProxyTargetCircuitBreaker(threshold int, openDuration time.Duration) *localProxyTargetCircuitBreaker {
 	if threshold < 1 {
 		threshold = 1

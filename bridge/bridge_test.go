@@ -195,6 +195,23 @@ func TestLocalProxyTargetCircuitIsolatesFailingTarget(t *testing.T) {
 	<-done
 }
 
+func TestLocalProxyTargetFastFailRetryAfter(t *testing.T) {
+	retryAfter := 1500 * time.Millisecond
+	got, ok := LocalProxyTargetFastFailRetryAfter(&localProxyTargetCircuitOpenError{
+		target:     "127.0.0.1:8080",
+		retryAfter: retryAfter,
+	})
+	if !ok {
+		t.Fatal("expected local proxy target fast-fail error")
+	}
+	if got != retryAfter {
+		t.Fatalf("unexpected retry-after %s, want %s", got, retryAfter)
+	}
+	if _, ok := LocalProxyTargetFastFailRetryAfter(nil); ok {
+		t.Fatal("nil error should not be reported as fast-fail")
+	}
+}
+
 func TestRandomTargetConnectRetryDelayRange(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		delay := randomTargetConnectRetryDelay(500 * time.Millisecond)

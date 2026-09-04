@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"math/rand"
 	"net"
@@ -440,7 +441,8 @@ func (s *httpServer) finishHTTPUpstreamError(c *conn.Conn, accessLog *httpAccess
 	}
 	accessLog.SetPhase(phase)
 	accessLog.SetStatusCode(statusCode)
-	accessLog.SetResponseBytes(s.httpUpstreamErrorResponseBytes(statusCode, targetAddr))
+	fastFailText := upstreamFastFailText(err)
+	accessLog.SetResponseBytes(s.httpUpstreamErrorResponseBytes(statusCode, targetAddr, fastFailText))
 	if phase == httpAccessLogPhaseTargetConnect {
 		accessLog.Finish(upstreamUnavailableErrorText(err, attempts))
 	} else if isRetryableUpstreamDisconnect(err) {
@@ -450,7 +452,18 @@ func (s *httpServer) finishHTTPUpstreamError(c *conn.Conn, accessLog *httpAccess
 	} else {
 		accessLog.Finish(upstreamUnavailableErrorText(err, attempts))
 	}
-	s.writeHTTPUpstreamError(c.Conn, statusCode, targetAddr)
+	s.writeHTTPUpstreamError(c.Conn, statusCode, targetAddr, fastFailText)
+}
+
+func upstreamFastFailText(err error) string {
+	retryAfter, ok := bridge.LocalProxyTargetFastFailRetryAfter(err)
+	if !ok {
+		return ""
+	}
+	if retryAfter < 0 {
+		retryAfter = 0
+	}
+	return fmt.Sprintf("Fast fail in %.1f seconds", retryAfter.Seconds())
 }
 
 type upstreamRetryConfigProvider interface {

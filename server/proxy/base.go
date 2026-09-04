@@ -74,8 +74,8 @@ func (s *BaseServer) writeHTTPError(c net.Conn, statusCode int) {
 	s.writeHTTPErrorBody(c, statusCode, s.httpErrorBody(statusCode))
 }
 
-func (s *BaseServer) writeHTTPUpstreamError(c net.Conn, statusCode int, targetAddr string) {
-	s.writeHTTPErrorBody(c, statusCode, s.httpUpstreamErrorBody(statusCode, targetAddr))
+func (s *BaseServer) writeHTTPUpstreamError(c net.Conn, statusCode int, targetAddr string, detailLines ...string) {
+	s.writeHTTPErrorBody(c, statusCode, s.httpUpstreamErrorBody(statusCode, targetAddr, detailLines...))
 }
 
 func (s *BaseServer) writeHTTPErrorBody(c net.Conn, statusCode int, body []byte) {
@@ -93,8 +93,8 @@ func (s *BaseServer) httpErrorResponseBytes(statusCode int) int64 {
 	return httpErrorResponseBytesWithBody(statusCode, s.httpErrorBody(statusCode))
 }
 
-func (s *BaseServer) httpUpstreamErrorResponseBytes(statusCode int, targetAddr string) int64 {
-	return httpErrorResponseBytesWithBody(statusCode, s.httpUpstreamErrorBody(statusCode, targetAddr))
+func (s *BaseServer) httpUpstreamErrorResponseBytes(statusCode int, targetAddr string, detailLines ...string) int64 {
+	return httpErrorResponseBytesWithBody(statusCode, s.httpUpstreamErrorBody(statusCode, targetAddr, detailLines...))
 }
 
 func httpErrorResponseBytesWithBody(statusCode int, body []byte) int64 {
@@ -110,15 +110,20 @@ func (s *BaseServer) httpErrorBody(statusCode int) []byte {
 	return buildHTTPErrorBody(statusCode, httpErrorDisplayText(statusCode, statusText), "")
 }
 
-func (s *BaseServer) httpUpstreamErrorBody(statusCode int, targetAddr string) []byte {
+func (s *BaseServer) httpUpstreamErrorBody(statusCode int, targetAddr string, detailLines ...string) []byte {
 	statusCode, statusText := normalizeHTTPErrorStatus(statusCode)
-	return buildHTTPErrorBody(statusCode, httpErrorDisplayText(statusCode, statusText), targetAddr)
+	return buildHTTPErrorBody(statusCode, httpErrorDisplayText(statusCode, statusText), targetAddr, detailLines...)
 }
 
-func buildHTTPErrorBody(statusCode int, displayText string, targetAddr string) []byte {
-	targetHTML := ""
+func buildHTTPErrorBody(statusCode int, displayText string, targetAddr string, detailLines ...string) []byte {
+	detailHTML := ""
 	if targetAddr = strings.TrimSpace(targetAddr); targetAddr != "" {
-		targetHTML = fmt.Sprintf("\n<p>Target: %s</p>", html.EscapeString(targetAddr))
+		detailHTML += fmt.Sprintf("\n<p>Target: %s</p>", html.EscapeString(targetAddr))
+	}
+	for _, detail := range detailLines {
+		if detail = strings.TrimSpace(detail); detail != "" {
+			detailHTML += fmt.Sprintf("\n<p>%s</p>", html.EscapeString(detail))
+		}
 	}
 	return []byte(fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
@@ -129,7 +134,7 @@ func buildHTTPErrorBody(statusCode int, displayText string, targetAddr string) [
 <body>
 <h3>[%d] %s</h3>%s
 </body>
-</html>`, statusCode, displayText, statusCode, displayText, targetHTML))
+</html>`, statusCode, displayText, statusCode, displayText, detailHTML))
 }
 
 func httpErrorDisplayText(statusCode int, statusText string) string {
