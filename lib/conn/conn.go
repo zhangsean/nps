@@ -14,7 +14,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"ehang.io/nps/lib/common"
@@ -30,7 +29,7 @@ type Conn struct {
 	Rb   []byte
 }
 
-//new conn
+// new conn
 func NewConn(conn net.Conn) *Conn {
 	return &Conn{Conn: conn}
 }
@@ -57,7 +56,7 @@ func (s *Conn) readRequest(buf []byte) (n int, err error) {
 	}
 }
 
-//get host 、connection type、method...from connection
+// get host 、connection type、method...from connection
 func (s *Conn) GetHost() (method, address string, rb []byte, err error, r *http.Request) {
 	var b [32 * 1024]byte
 	var n int
@@ -108,7 +107,7 @@ func (s *Conn) GetShortContent(l int) (b []byte, err error) {
 	return buf, binary.Read(s, binary.LittleEndian, &buf)
 }
 
-//读取指定长度内容
+// 读取指定长度内容
 func (s *Conn) ReadLen(cLen int, buf []byte) (int, error) {
 	if cLen > len(buf) || cLen <= 0 {
 		return 0, errors.New("长度错误" + strconv.Itoa(cLen))
@@ -133,13 +132,13 @@ func (s *Conn) WriteLenContent(buf []byte) (err error) {
 	return binary.Write(s.Conn, binary.LittleEndian, b)
 }
 
-//read flag
+// read flag
 func (s *Conn) ReadFlag() (string, error) {
 	buf := make([]byte, 4)
 	return string(buf), binary.Read(s, binary.LittleEndian, &buf)
 }
 
-//set alive
+// set alive
 func (s *Conn) SetAlive(tp string) {
 	switch s.Conn.(type) {
 	case *kcp.UDPSession:
@@ -154,7 +153,7 @@ func (s *Conn) SetAlive(tp string) {
 	}
 }
 
-//set read deadline
+// set read deadline
 func (s *Conn) SetReadDeadlineBySecond(t time.Duration) {
 	switch s.Conn.(type) {
 	case *kcp.UDPSession:
@@ -166,20 +165,20 @@ func (s *Conn) SetReadDeadlineBySecond(t time.Duration) {
 	}
 }
 
-//get link info from conn
+// get link info from conn
 func (s *Conn) GetLinkInfo() (lk *Link, err error) {
 	err = s.getInfo(&lk)
 	return
 }
 
-//send info for link
+// send info for link
 func (s *Conn) SendHealthInfo(info, status string) (int, error) {
 	raw := bytes.NewBuffer([]byte{})
 	common.BinaryWrite(raw, info, status)
 	return s.Write(raw.Bytes())
 }
 
-//get health info from conn
+// get health info from conn
 func (s *Conn) GetHealthInfo() (info string, status bool, err error) {
 	var l int
 	buf := common.BufPoolMax.Get().([]byte)
@@ -197,7 +196,7 @@ func (s *Conn) GetHealthInfo() (info string, status bool, err error) {
 	return "", false, errors.New("receive health info error")
 }
 
-//get task info
+// get task info
 func (s *Conn) GetHostInfo() (h *file.Host, err error) {
 	err = s.getInfo(&h)
 	h.Id = int(file.GetDb().JsonDb.GetHostId())
@@ -206,7 +205,7 @@ func (s *Conn) GetHostInfo() (h *file.Host, err error) {
 	return
 }
 
-//get task info
+// get task info
 func (s *Conn) GetConfigInfo() (c *file.Client, err error) {
 	err = s.getInfo(&c)
 	c.NoStore = true
@@ -218,7 +217,7 @@ func (s *Conn) GetConfigInfo() (c *file.Client, err error) {
 	return
 }
 
-//get task info
+// get task info
 func (s *Conn) GetTaskInfo() (t *file.Tunnel, err error) {
 	err = s.getInfo(&t)
 	t.Id = int(file.GetDb().JsonDb.GetTaskId())
@@ -227,7 +226,7 @@ func (s *Conn) GetTaskInfo() (t *file.Tunnel, err error) {
 	return
 }
 
-//send  info
+// send  info
 func (s *Conn) SendInfo(t interface{}, flag string) (int, error) {
 	/*
 		The task info is formed as follows:
@@ -253,7 +252,7 @@ func (s *Conn) SendInfo(t interface{}, flag string) (int, error) {
 	return s.Write(raw.Bytes())
 }
 
-//get task info
+// get task info
 func (s *Conn) getInfo(t interface{}) (err error) {
 	var l int
 	buf := common.BufPoolMax.Get().([]byte)
@@ -268,17 +267,17 @@ func (s *Conn) getInfo(t interface{}) (err error) {
 	return
 }
 
-//close
+// close
 func (s *Conn) Close() error {
 	return s.Conn.Close()
 }
 
-//write
+// write
 func (s *Conn) Write(b []byte) (int, error) {
 	return s.Conn.Write(b)
 }
 
-//read
+// read
 func (s *Conn) Read(b []byte) (n int, err error) {
 	if s.Rb != nil {
 		//if the rb is not nil ,read rb first
@@ -292,27 +291,27 @@ func (s *Conn) Read(b []byte) (n int, err error) {
 	return s.Conn.Read(b)
 }
 
-//write sign flag
+// write sign flag
 func (s *Conn) WriteClose() (int, error) {
 	return s.Write([]byte(common.RES_CLOSE))
 }
 
-//write main
+// write main
 func (s *Conn) WriteMain() (int, error) {
 	return s.Write([]byte(common.WORK_MAIN))
 }
 
-//write main
+// write main
 func (s *Conn) WriteConfig() (int, error) {
 	return s.Write([]byte(common.WORK_CONFIG))
 }
 
-//write chan
+// write chan
 func (s *Conn) WriteChan() (int, error) {
 	return s.Write([]byte(common.WORK_CHAN))
 }
 
-//get task or host result of add
+// get task or host result of add
 func (s *Conn) GetAddStatus() (b bool) {
 	binary.Read(s.Conn, binary.LittleEndian, &b)
 	return
@@ -347,7 +346,7 @@ func (s *Conn) SetReadDeadline(t time.Time) error {
 	return s.Conn.SetReadDeadline(t)
 }
 
-//get the assembled amount data(len 4 and content)
+// get the assembled amount data(len 4 and content)
 func GetLenBytes(buf []byte) (b []byte, err error) {
 	raw := bytes.NewBuffer([]byte{})
 	if err = binary.Write(raw, binary.LittleEndian, int32(len(buf))); err != nil {
@@ -360,7 +359,7 @@ func GetLenBytes(buf []byte) (b []byte, err error) {
 	return
 }
 
-//udp connection setting
+// udp connection setting
 func SetUdpSession(sess *kcp.UDPSession) {
 	sess.SetStreamMode(true)
 	sess.SetWindowSize(1024, 1024)
@@ -372,38 +371,21 @@ func SetUdpSession(sess *kcp.UDPSession) {
 	sess.SetWriteDelay(false)
 }
 
-//conn1 mux conn
+// conn1 mux conn
 func CopyWaitGroup(conn1, conn2 net.Conn, crypt bool, snappy bool, rate *rate.Rate, flow *file.Flow, isServer bool, rb []byte) {
-	//var in, out int64
-	//var wg sync.WaitGroup
 	connHandle := GetConn(conn1, crypt, snappy, rate, isServer)
 	if rb != nil {
-		connHandle.Write(rb)
+		if _, err := connHandle.Write(rb); err != nil {
+			_ = connHandle.Close()
+			_ = conn2.Close()
+			logs.Error(err)
+			return
+		}
 	}
-	//go func(in *int64) {
-	//	wg.Add(1)
-	//	*in, _ = common.CopyBuffer(connHandle, conn2)
-	//	connHandle.Close()
-	//	conn2.Close()
-	//	wg.Done()
-	//}(&in)
-	//out, _ = common.CopyBuffer(conn2, connHandle)
-	//connHandle.Close()
-	//conn2.Close()
-	//wg.Wait()
-	//if flow != nil {
-	//	flow.Add(in, out)
-	//}
-	wg := new(sync.WaitGroup)
-	wg.Add(1)
-	err := goroutine.CopyConnsPool.Invoke(goroutine.NewConns(connHandle, conn2, flow, wg))
-	wg.Wait()
-	if err != nil {
-		logs.Error(err)
-	}
+	goroutine.CopyConns(connHandle, conn2, flow)
 }
 
-//get crypt or snappy conn
+// get crypt or snappy conn
 func GetConn(conn net.Conn, cpt, snappy bool, rt *rate.Rate, isServer bool) io.ReadWriteCloser {
 	if cpt {
 		if isServer {

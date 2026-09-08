@@ -17,7 +17,6 @@ require (
 	github.com/klauspost/cpuid/v2 v2.0.6 // indirect
 	github.com/klauspost/pgzip v1.2.1 // indirect
 	github.com/klauspost/reedsolomon v1.9.12 // indirect
-	github.com/panjf2000/ants/v2 v2.4.2
 	github.com/pkg/errors v0.9.1
 	github.com/shiena/ansicolor v0.0.0-20151119151921-a422bbe96644 // indirect
 	github.com/shirou/gopsutil/v3 v3.21.3
@@ -34,5 +33,5 @@ require (
 
 replace (
 	github.com/astaxie/beego => github.com/exfly/beego v1.12.0-export-init
-	ehang.io/nps-mux => github.com/fangwentong/nps-mux v0.0.0-20220505120640-5438a7532d3d
+	ehang.io/nps-mux => github.com/fangwentong/nps-mux v0.0.0-20260908153202-0e0dd5742fdb
 )

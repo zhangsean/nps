@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/astaxie/beego/logs"
@@ -27,16 +28,16 @@ type TRPClient struct {
 	p2pAddr        map[string]string
 	tunnel         *nps_mux.Mux
 	signal         *conn.Conn
-	ticker         *time.Ticker
 	cnf            *config.Config
 	disconnectTime int
 	once           sync.Once
+	mu             sync.Mutex
 
-	nowStatus int
-	closed    bool
+	nowStatus int32
+	closed    uint32
 }
 
-//new client
+// new client
 func NewRPClient(svraddr string, vKey string, bridgeConnType string, proxyUrl string, cnf *config.Config, disconnectTime int) *TRPClient {
 	return &TRPClient{
 		svrAddr:        svraddr,
@@ -50,13 +51,13 @@ func NewRPClient(svraddr string, vKey string, bridgeConnType string, proxyUrl st
 	}
 }
 
-//start
+// start
 func (s *TRPClient) Start() {
 retry:
-	if s.closed {
+	if atomic.LoadUint32(&s.closed) != 0 {
 		return
 	}
-	s.nowStatus = 0
+	atomic.StoreInt32(&s.nowStatus, 0)
 	c, err := NewConn(s.bridgeConnType, s.vKey, s.svrAddr, common.WORK_MAIN, s.proxyUrl)
 	if err == ErrValidationKeyIncorrect {
 		return
@@ -71,37 +72,42 @@ retry:
 		goto retry
 	}
 	logs.Info("Successful connection with server %s", s.svrAddr)
-	//monitor the connection
-	go s.ping()
+	s.mu.Lock()
+	if atomic.LoadUint32(&s.closed) != 0 {
+		s.mu.Unlock()
+		_ = c.Close()
+		return
+	}
 	s.signal = c
+	s.mu.Unlock()
 	//start a channel connection
 	go s.newChan()
 	//start health check if the it's open
 	if s.cnf != nil && len(s.cnf.Healths) > 0 {
-		go heathCheck(s.cnf.Healths, s.signal)
+		go heathCheck(s.cnf.Healths, c)
 	}
-	s.nowStatus = 1
+	atomic.StoreInt32(&s.nowStatus, 1)
 	//msg connection, eg udp
 	// TODO: use heartbeat requests to keep the connection alive
-	s.handleMain()
+	s.handleMain(c)
 }
 
-//handle main connection
-func (s *TRPClient) handleMain() {
+// handle main connection
+func (s *TRPClient) handleMain(signal *conn.Conn) {
 	for {
-		flags, err := s.signal.ReadFlag()
+		flags, err := signal.ReadFlag()
 		if err != nil {
 			logs.Error("Accept server data error %s, end this service, local: %s, remote: %s", err.Error(),
-				s.signal.Conn.LocalAddr(), s.signal.Conn.RemoteAddr())
+				signal.Conn.LocalAddr(), signal.Conn.RemoteAddr())
 			break
 		}
 		switch flags {
 		case common.NEW_UDP_CONN:
 			//read server udp addr and password
-			if lAddr, err := s.signal.GetShortLenContent(); err != nil {
+			if lAddr, err := signal.GetShortLenContent(); err != nil {
 				logs.Warn(err)
 				return
-			} else if pwd, err := s.signal.GetShortLenContent(); err == nil {
+			} else if pwd, err := signal.GetShortLenContent(); err == nil {
 				var localAddr string
 				//The local port remains unchanged for a certain period of time
 				if v, ok := s.p2pAddr[crypt.Md5(string(pwd)+strconv.Itoa(int(time.Now().Unix()/100)))]; !ok {
@@ -154,16 +160,24 @@ func (s *TRPClient) newUdpConn(localAddr, rAddr string, md5Password string) {
 	}
 }
 
-//pmux tunnel
+// pmux tunnel
 func (s *TRPClient) newChan() {
 	tunnel, err := NewConn(s.bridgeConnType, s.vKey, s.svrAddr, common.WORK_CHAN, s.proxyUrl)
 	if err != nil {
 		logs.Error("connect to ", s.svrAddr, "error:", err)
 		return
 	}
-	s.tunnel = nps_mux.NewMux(tunnel.Conn, s.bridgeConnType, s.disconnectTime)
+	mux := nps_mux.NewMux(tunnel.Conn, s.bridgeConnType, s.disconnectTime)
+	s.mu.Lock()
+	if atomic.LoadUint32(&s.closed) != 0 {
+		s.mu.Unlock()
+		_ = mux.Close()
+		return
+	}
+	s.tunnel = mux
+	s.mu.Unlock()
 	for {
-		src, err := s.tunnel.Accept()
+		src, err := mux.Accept()
 		if err != nil {
 			logs.Warn(err)
 			s.Close()
@@ -281,21 +295,7 @@ func (s *TRPClient) handleUdp(serverConn net.Conn) {
 }
 
 func (s *TRPClient) Status() int {
-	return s.nowStatus
-}
-
-// Whether the monitor channel is closed
-func (s *TRPClient) ping() {
-	s.ticker = time.NewTicker(time.Second * 5)
-	for {
-		select {
-		case <-s.ticker.C:
-			if s.tunnel != nil && s.tunnel.IsClose {
-				s.Close()
-				return
-			}
-		}
-	}
+	return int(atomic.LoadInt32(&s.nowStatus))
 }
 
 func (s *TRPClient) Close() {
@@ -303,15 +303,16 @@ func (s *TRPClient) Close() {
 }
 
 func (s *TRPClient) closing() {
-	s.nowStatus = 0
-	if s.tunnel != nil {
-		_ = s.tunnel.Close()
+	atomic.StoreUint32(&s.closed, 1)
+	atomic.StoreInt32(&s.nowStatus, 0)
+	s.mu.Lock()
+	tunnel := s.tunnel
+	signal := s.signal
+	s.mu.Unlock()
+	if tunnel != nil {
+		_ = tunnel.Close()
 	}
-	if s.signal != nil {
-		_ = s.signal.Close()
+	if signal != nil {
+		_ = signal.Close()
 	}
-	if s.ticker != nil {
-		s.ticker.Stop()
-	}
-	s.closed = true
 }
