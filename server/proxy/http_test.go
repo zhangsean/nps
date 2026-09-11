@@ -157,6 +157,32 @@ func TestBuildHTTPAccessLogLineForUnmatchedHost(t *testing.T) {
 	}
 }
 
+func TestFormatHTTPUpstreamErrorLogUsesXForwardedFor(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "http://jenkins.zjwm.cc/", nil)
+	request.RemoteAddr = "192.168.1.10:42318"
+	request.Header.Set("X-Forwarded-For", "203.0.113.7, 172.16.68.13")
+	host := &file.Host{Client: &file.Client{Id: 2}}
+	record := newHTTPAccessLogRecord(request, getRequestRemoteAddr(request, ""), host, "192.168.1.133:8080", false)
+	record.entry.Error = "upstream unavailable after 3 attempts: client connection timeout"
+
+	got := formatHTTPUpstreamErrorLog(record, http.StatusBadGateway, httpAccessLogPhaseTargetConnect, "192.168.1.133:8080", errors.New("client connection timeout"))
+	want := `http upstream error status_code=502 host="jenkins.zjwm.cc" client_id=2 target="192.168.1.133:8080" phase="target_connect" remote_addr="203.0.113.7, 172.16.68.13" error="upstream unavailable after 3 attempts: client connection timeout"`
+	if got != want {
+		t.Fatalf("unexpected upstream error log:\n got: %s\nwant: %s", got, want)
+	}
+}
+
+func TestFormatHTTPUpstreamErrorLogFallsBackToRemoteAddr(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "http://jenkins.zjwm.cc/", nil)
+	request.RemoteAddr = "192.168.1.10:42318"
+	record := newHTTPAccessLogRecord(request, getRequestRemoteAddr(request, ""), nil, "192.168.1.133:8080", false)
+
+	got := formatHTTPUpstreamErrorLog(record, http.StatusBadGateway, httpAccessLogPhaseTargetConnect, "192.168.1.133:8080", errors.New("client connection timeout"))
+	if !strings.Contains(got, `remote_addr="192.168.1.10:42318"`) {
+		t.Fatalf("upstream error log missing socket remote address: %s", got)
+	}
+}
+
 func TestBuildHTTPSAccessLogLineForUnmatchedHost(t *testing.T) {
 	request := buildHttpsRequest("missing.example.com")
 	record := newHTTPAccessLogRecord(request, "10.0.0.4:44321", nil, "", true)

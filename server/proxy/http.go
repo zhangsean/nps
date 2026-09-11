@@ -377,7 +377,6 @@ func (s *httpServer) proxyHTTPRequestOnce(c *conn.Conn, host *file.Host, r *http
 	target, err := s.bridge.SendLinkInfo(host.Client.Id, lk, nil)
 	accessLog.AddPhaseDuration(httpAccessLogPhaseTargetConnect, time.Since(targetConnectStart))
 	if err != nil {
-		logs.Notice("connect to target %s error %s", lk.Host, err)
 		return false, false, httpAccessLogPhaseTargetConnect, targetAddr, err
 	}
 	connClient := conn.GetConn(target, lk.Crypt, lk.Compress, host.Client.Rate, true)
@@ -453,7 +452,30 @@ func (s *httpServer) finishHTTPUpstreamError(c *conn.Conn, accessLog *httpAccess
 	} else {
 		accessLog.Finish(upstreamUnavailableErrorText(err, attempts))
 	}
+	logs.Notice("%s", formatHTTPUpstreamErrorLog(accessLog, statusCode, phase, targetAddr, err))
 	s.writeHTTPUpstreamError(c.Conn, statusCode, targetAddr, fastFailText)
+}
+
+func formatHTTPUpstreamErrorLog(accessLog *httpAccessLogRecord, statusCode int, phase string, targetAddr string, err error) string {
+	host := ""
+	remoteAddr := ""
+	clientID := 0
+	errorText := ""
+	if err != nil {
+		errorText = err.Error()
+	}
+	if accessLog != nil {
+		host = accessLog.entry.Host
+		remoteAddr = accessLog.entry.RemoteAddr
+		clientID = accessLog.entry.ClientID
+		if accessLog.entry.Target != "" {
+			targetAddr = accessLog.entry.Target
+		}
+		if accessLog.entry.Error != "" {
+			errorText = accessLog.entry.Error
+		}
+	}
+	return fmt.Sprintf("http upstream error status_code=%d host=%q client_id=%d target=%q phase=%q remote_addr=%q error=%q", statusCode, host, clientID, targetAddr, phase, remoteAddr, errorText)
 }
 
 func upstreamFastFailText(err error) string {
