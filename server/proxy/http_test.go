@@ -703,17 +703,17 @@ func TestHTTPErrorResponseBytes(t *testing.T) {
 
 func TestHTTPUpstreamErrorBodyIncludesTarget(t *testing.T) {
 	server := &httpServer{}
-	body := server.httpUpstreamErrorBody(http.StatusBadGateway, `10.0.0.8:8080<script>`, `Fast fail: retry in 8.5 seconds<script>`)
+	body := server.httpUpstreamErrorBody(http.StatusBadGateway, `10.0.0.8:8080<script>`, `203.0.113.7, 172.16.68.13, 192.168.1.3<script>`, `Fast fail: retry in 8.5 seconds<script>`)
 	text := string(body)
-	for _, want := range []string{"[502] Bad Upstream", "Target: 10.0.0.8:8080&lt;script&gt;", "Fast fail: retry in 8.5 seconds&lt;script&gt;"} {
+	for _, want := range []string{"[502] Bad Upstream", "Target: 10.0.0.8:8080&lt;script&gt;", "Client: 203.0.113.7, 172.16.68.13, 192.168.1.3&lt;script&gt;", "Fast fail: retry in 8.5 seconds&lt;script&gt;"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("upstream error body missing %q in %q", want, text)
 		}
 	}
-	if strings.Contains(text, "[502] Bad Gateway") || strings.Contains(text, "10.0.0.8:8080<script>") || strings.Contains(text, "Fast fail: retry in 8.5 seconds<script>") {
+	if strings.Contains(text, "[502] Bad Gateway") || strings.Contains(text, "10.0.0.8:8080<script>") || strings.Contains(text, "192.168.1.3<script>") || strings.Contains(text, "Fast fail: retry in 8.5 seconds<script>") {
 		t.Fatalf("upstream error body contains old or unescaped content: %q", text)
 	}
-	if got, want := server.httpUpstreamErrorResponseBytes(http.StatusBadGateway, "10.0.0.8:8080"), int64(len("HTTP/1.1 502 Bad Gateway\r\n\r\n")+len(server.httpUpstreamErrorBody(http.StatusBadGateway, "10.0.0.8:8080"))); got != want {
+	if got, want := server.httpUpstreamErrorResponseBytes(http.StatusBadGateway, "10.0.0.8:8080", "203.0.113.7, 172.16.68.13"), int64(len("HTTP/1.1 502 Bad Gateway\r\n\r\n")+len(server.httpUpstreamErrorBody(http.StatusBadGateway, "10.0.0.8:8080", "203.0.113.7, 172.16.68.13"))); got != want {
 		t.Fatalf("unexpected upstream response bytes %d, want %d", got, want)
 	}
 }

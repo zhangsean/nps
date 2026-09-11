@@ -27,6 +27,7 @@ https://natnps.com/
 ## 更新日志
 - 2026-09-11
   - **优化**：HTTP 代理最终返回 502/504 时，运行日志增加 `status_code`、`host`、`client_id`、`target`、`phase` 和 `remote_addr`；`remote_addr` 优先记录 `X-Forwarded-For`，缺失时回退到连接来源地址，便于快速区分内网直连与公网 DNS 回退链路。
+  - **优化**：HTTP 502/504 错误页面增加客户端地址，完整保留逗号分隔的 `X-Forwarded-For` 原始链路；没有该请求头时显示连接来源地址。
 
 - 2026-09-04  v0.27.28
   - **优化**：HTTP/HTTPS access.log 将目标熔断快速失败记录为 `error_type=target_fast_fail`，并单独输出 `retry_after_ms`，错误文本保持稳定不再携带动态倒计时，便于日志聚合检索。
