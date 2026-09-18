@@ -202,7 +202,7 @@ func PrepareConfigApply(values map[string]string, changed []string) (*ConfigAppl
 	if plan.retryCount, err = configInt(plan.values, "target_connect_retry_count", 2, 0, 100); err != nil {
 		return nil, err
 	}
-	if plan.retryInterval, err = configInt(plan.values, "target_connect_retry_interval_ms", 0, 0, 3600000); err != nil {
+	if plan.retryInterval, err = configInt(plan.values, "target_connect_retry_interval_ms", 250, 0, 3600000); err != nil {
 		return nil, err
 	}
 	if plan.upstreamTimeout, err = configInt(plan.values, "upstream_response_timeout_seconds", 0, 0, 86400); err != nil {

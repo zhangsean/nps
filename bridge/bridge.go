@@ -32,6 +32,7 @@ var ServerTlsEnable bool = false
 const defaultClientConnectTimeout = 2 * time.Second
 const defaultTargetConnectTimeout = 2 * time.Second
 const defaultTargetConnectRetryCount = 2
+const defaultTargetConnectRetryInterval = 250 * time.Millisecond
 const defaultLocalProxyTargetCircuitFailureThreshold = 3
 const defaultLocalProxyTargetCircuitInitialOpenDuration = 5 * time.Second
 const defaultLocalProxyTargetCircuitMaxOpenDuration = 30 * time.Second
@@ -128,7 +129,7 @@ func normalizeRuntimeConfig(disconnectTime int, clientConnectTimeoutSeconds int,
 	}
 	targetConnectRetryInterval := time.Duration(targetConnectRetryIntervalMs) * time.Millisecond
 	if targetConnectRetryInterval < 0 {
-		targetConnectRetryInterval = 0
+		targetConnectRetryInterval = defaultTargetConnectRetryInterval
 	}
 	if disconnectTime <= 0 {
 		disconnectTime = 60

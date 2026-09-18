@@ -29,6 +29,7 @@ https://natnps.com/
   - **优化**：HTTP 代理最终返回 502/504 时，运行日志增加 `status_code`、`host`、`client_id`、`target`、`phase` 和 `remote_addr`；`remote_addr` 优先记录 `X-Forwarded-For`，缺失时回退到连接来源地址，便于快速区分内网直连与公网 DNS 回退链路。
   - **优化**：HTTP 502/504 错误页面只展示异常 target 和必要状态，不展示可能经过加密隧道或多级代理的客户端地址；来源链路仍保留在运行日志和 access.log 中供后台排查。
   - **优化**：远程 NPC 客户端已断开或无法建立 mux 子连接时，HTTP 502 错误页面显示 `Client is disconnected`，并与普通后端 target 连接失败明确区分。
+  - **优化**：目标连接重试默认增加 1～250ms 随机退避，降低异常后端恢复时的同步重试冲击；`target_connect_retry_interval_ms=0` 可显式关闭。
 
 - 2026-09-04  v0.27.28
   - **优化**：HTTP/HTTPS access.log 将目标熔断快速失败记录为 `error_type=target_fast_fail`，并单独输出 `retry_after_ms`，错误文本保持稳定不再携带动态倒计时，便于日志聚合检索。
@@ -90,7 +91,7 @@ https://natnps.com/
   - **修复**：修正 SOCKS5 UDP 日志中端口输出方式，避免将端口号按单个字符输出。
 
 - 2026-07-15  v0.27.18
-  - **新增**：`nps.conf` 增加 `target_connect_retry_interval_ms`，支持目标连接失败后、下一次重试前随机等待，默认 0 不等待；nps LocalProxy 触发目标连接重试时会写入 `event=target_connect_retry` 的 access.log 事件。
+  - **新增**：`nps.conf` 增加 `target_connect_retry_interval_ms`，支持目标连接失败后、下一次重试前随机等待；当前默认上限为 250ms，配置 0 可关闭；nps LocalProxy 触发目标连接重试时会写入 `event=target_connect_retry` 的 access.log 事件。
   - **修复**：HTTP 代理连接目标后端失败时返回 502，等待后端响应超时时返回 504，避免将上游错误误报为 404。
 
 - 2026-07-14  v0.27.17

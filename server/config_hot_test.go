@@ -91,6 +91,26 @@ func TestPrepareConfigApplyRejectsInvalidValues(t *testing.T) {
 	}
 }
 
+func TestPrepareConfigApplyTargetRetryBackoffDefaultAndDisable(t *testing.T) {
+	values := requiredTestConfig()
+	plan, err := PrepareConfigApply(values, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.retryInterval != 250 {
+		t.Fatalf("default retry interval = %dms, want 250ms", plan.retryInterval)
+	}
+
+	values["target_connect_retry_interval_ms"] = "0"
+	plan, err = PrepareConfigApply(values, []string{"target_connect_retry_interval_ms"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.retryInterval != 0 {
+		t.Fatalf("explicit zero retry interval = %dms, want disabled", plan.retryInterval)
+	}
+}
+
 func requiredTestConfig() map[string]string {
 	return map[string]string{
 		"bridge_type":  "tcp",

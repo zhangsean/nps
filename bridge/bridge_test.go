@@ -58,8 +58,15 @@ func TestNewTunnelTargetConnectRetryDefault(t *testing.T) {
 	if tunnel.targetConnectRetryCount != defaultTargetConnectRetryCount {
 		t.Fatalf("unexpected default target connect retry count %d", tunnel.targetConnectRetryCount)
 	}
-	if tunnel.targetConnectRetryInterval != 0 {
+	if tunnel.targetConnectRetryInterval != defaultTargetConnectRetryInterval {
 		t.Fatalf("unexpected default target connect retry interval %s", tunnel.targetConnectRetryInterval)
+	}
+}
+
+func TestNewTunnelTargetConnectRetryCanBeDisabled(t *testing.T) {
+	tunnel := NewTunnel(0, "tcp", false, &sync.Map{}, 60, 0, 0, 0, 0)
+	if tunnel.targetConnectRetryInterval != 0 {
+		t.Fatalf("explicit zero should disable retry backoff, got %s", tunnel.targetConnectRetryInterval)
 	}
 }
 
