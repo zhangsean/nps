@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
 export GOPROXY=direct
 
 sudo apt-get update

@@ -25,6 +25,9 @@ https://natnps.com/
 
 
 ## 更新日志
+- 2026-09-18  v0.27.30
+  - **修复**：同步 SDK 入口与 `NewRPClient` 的公网 IP 上报参数，恢复 Windows/Linux `npc_sdk` 构建；发布脚本遇到任一构建或上传失败时立即退出，避免再次发布空制品。
+
 - 2026-09-18  v0.27.29
   - **优化**：HTTP 代理最终返回 502/504 时，运行日志增加 `status_code`、`host`、`client_id`、`target`、`phase` 和 `remote_addr`；`remote_addr` 优先记录 `X-Forwarded-For`，缺失时回退到连接来源地址，便于快速区分内网直连与公网 DNS 回退链路。
   - **优化**：HTTP 502/504 错误页面只展示异常 target 和必要状态，不展示可能经过加密隧道或多级代理的客户端地址；来源链路仍保留在运行日志和 access.log 中供后台排查。
