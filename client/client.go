@@ -365,7 +365,8 @@ func dialTargetsWithRetry(connType string, targetHosts []string, timeout time.Du
 	}
 	for attempt := 1; attempt <= attempts; attempt++ {
 		targetHost := targetHosts[(attempt-1)%len(targetHosts)]
-		if circuitErr := targetConnectCircuit.BeforeDial(connType, targetHost); circuitErr != nil {
+		permit, circuitErr := targetConnectCircuit.BeforeDial(connType, targetHost)
+		if circuitErr != nil {
 			err = circuitErr
 			if allOpen, allOpenErr := targetConnectCircuit.AllOpen(connType, targetHosts); allOpen {
 				if allOpenErr != nil {
@@ -378,7 +379,7 @@ func dialTargetsWithRetry(connType string, targetHosts []string, timeout time.Du
 			continue
 		}
 		targetConn, err = net.DialTimeout(connType, targetHost, timeout)
-		if openErr := targetConnectCircuit.AfterDial(connType, targetHost, err); openErr != nil {
+		if openErr := targetConnectCircuit.AfterDial(permit, err); openErr != nil {
 			logs.Warn("target temporarily isolated, conn type %s, target %s, isolated for %s after repeated connect failures, error %s", connType, targetHost, openErr.RetryAfter.Round(time.Millisecond), err.Error())
 		}
 		if err == nil {
