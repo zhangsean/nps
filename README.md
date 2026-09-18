@@ -25,7 +25,7 @@ https://natnps.com/
 
 
 ## 更新日志
-- 2026-09-11
+- 2026-09-18  v0.27.29
   - **优化**：HTTP 代理最终返回 502/504 时，运行日志增加 `status_code`、`host`、`client_id`、`target`、`phase` 和 `remote_addr`；`remote_addr` 优先记录 `X-Forwarded-For`，缺失时回退到连接来源地址，便于快速区分内网直连与公网 DNS 回退链路。
   - **优化**：HTTP 502/504 错误页面只展示异常 target 和必要状态，不展示可能经过加密隧道或多级代理的客户端地址；来源链路仍保留在运行日志和 access.log 中供后台排查。
   - **优化**：远程 NPC 客户端已断开或无法建立 mux 子连接时，HTTP 502 错误页面显示 `Client is disconnected`，并与普通后端 target 连接失败明确区分。
