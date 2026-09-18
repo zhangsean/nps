@@ -38,6 +38,37 @@ const defaultLocalProxyTargetCircuitMaxOpenDuration = 30 * time.Second
 
 var targetConnectRetrySleep = time.Sleep
 
+type ClientDisconnectedError struct {
+	ClientID int
+	Cause    error
+}
+
+func (e *ClientDisconnectedError) Error() string {
+	if e == nil {
+		return "the client is disconnected"
+	}
+	if e.Cause != nil {
+		return fmt.Sprintf("the client %d is disconnected: %s", e.ClientID, e.Cause.Error())
+	}
+	return fmt.Sprintf("the client %d is disconnected", e.ClientID)
+}
+
+func (e *ClientDisconnectedError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Cause
+}
+
+func IsClientDisconnectedError(err error) bool {
+	var disconnectedErr *ClientDisconnectedError
+	return errors.As(err, &disconnectedErr)
+}
+
+func newClientDisconnectedError(clientID int, cause error) error {
+	return &ClientDisconnectedError{ClientID: clientID, Cause: cause}
+}
+
 type Client struct {
 	tunnel    *nps_mux.Mux
 	signal    *conn.Conn
@@ -496,10 +527,11 @@ func (s *Bridge) SendLinkInfo(clientId int, link *conn.Link, t *file.Tunnel) (ta
 			tunnel = v.(*Client).tunnel
 		}
 		if tunnel == nil {
-			err = errors.New("the client connect error")
+			err = newClientDisconnectedError(clientId, errors.New("client tunnel is unavailable"))
 			return
 		}
 		if target, err = tunnel.NewConnWithTimeout(runtimeConfig.ClientConnectTimeout); err != nil {
+			err = newClientDisconnectedError(clientId, err)
 			return
 		}
 		if t != nil && t.Mode == "file" {
@@ -513,10 +545,11 @@ func (s *Bridge) SendLinkInfo(clientId int, link *conn.Link, t *file.Tunnel) (ta
 		link.Option.RetryInterval = runtimeConfig.TargetConnectRetryInterval
 		if _, err = conn.NewConn(target).SendInfo(link, ""); err != nil {
 			logs.Info("new connect error ,the target %s refuse to connect", link.Host)
+			err = newClientDisconnectedError(clientId, err)
 			return
 		}
 	} else {
-		err = errors.New(fmt.Sprintf("the client %d is not connect", clientId))
+		err = newClientDisconnectedError(clientId, nil)
 	}
 	return
 }

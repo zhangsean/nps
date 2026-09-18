@@ -441,9 +441,10 @@ func (s *httpServer) finishHTTPUpstreamError(c *conn.Conn, accessLog *httpAccess
 	accessLog.SetPhase(phase)
 	accessLog.SetStatusCode(statusCode)
 	fastFailText := upstreamFastFailText(err)
+	detailLines := httpUpstreamErrorDetailLines(err, fastFailText)
 	accessLog.SetErrorDetails(err)
 	remoteAddr := accessLog.entry.RemoteAddr
-	accessLog.SetResponseBytes(s.httpUpstreamErrorResponseBytes(statusCode, targetAddr, remoteAddr, fastFailText))
+	accessLog.SetResponseBytes(s.httpUpstreamErrorResponseBytes(statusCode, targetAddr, remoteAddr, detailLines...))
 	if phase == httpAccessLogPhaseTargetConnect {
 		accessLog.Finish(upstreamUnavailableAccessLogErrorText(err, attempts))
 	} else if isRetryableUpstreamDisconnect(err) {
@@ -454,7 +455,18 @@ func (s *httpServer) finishHTTPUpstreamError(c *conn.Conn, accessLog *httpAccess
 		accessLog.Finish(upstreamUnavailableErrorText(err, attempts))
 	}
 	logs.Notice("%s", formatHTTPUpstreamErrorLog(accessLog, statusCode, phase, targetAddr, err))
-	s.writeHTTPUpstreamError(c.Conn, statusCode, targetAddr, remoteAddr, fastFailText)
+	s.writeHTTPUpstreamError(c.Conn, statusCode, targetAddr, remoteAddr, detailLines...)
+}
+
+func httpUpstreamErrorDetailLines(err error, fastFailText string) []string {
+	details := make([]string, 0, 2)
+	if bridge.IsClientDisconnectedError(err) {
+		details = append(details, "Client is disconnected")
+	}
+	if fastFailText != "" {
+		details = append(details, fastFailText)
+	}
+	return details
 }
 
 func formatHTTPUpstreamErrorLog(accessLog *httpAccessLogRecord, statusCode int, phase string, targetAddr string, err error) string {

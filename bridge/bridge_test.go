@@ -1,13 +1,35 @@
 package bridge
 
 import (
+	"errors"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"ehang.io/nps/lib/conn"
 )
+
+func TestSendLinkInfoReportsDisconnectedClient(t *testing.T) {
+	tunnel := NewTunnel(0, "tcp", false, &sync.Map{}, 60, 1, 1, 0, 0)
+	link := conn.NewLink("http", "127.0.0.1:8080", false, false, "127.0.0.1:12345", false)
+
+	_, err := tunnel.SendLinkInfo(42, link, nil)
+	if !IsClientDisconnectedError(err) {
+		t.Fatalf("expected disconnected client error, got %T: %v", err, err)
+	}
+	var disconnectedErr *ClientDisconnectedError
+	if !errors.As(err, &disconnectedErr) || disconnectedErr.ClientID != 42 {
+		t.Fatalf("unexpected disconnected client error: %#v", disconnectedErr)
+	}
+	if !strings.Contains(err.Error(), "client 42 is disconnected") {
+		t.Fatalf("disconnected client error missing client id: %v", err)
+	}
+	if IsClientDisconnectedError(errors.New("target connection refused")) {
+		t.Fatal("target error must not be classified as a disconnected client")
+	}
+}
 
 func TestNewTunnelTargetConnectRetryConfig(t *testing.T) {
 	tunnel := NewTunnel(0, "tcp", false, &sync.Map{}, 60, 3, 4, 0, 250)

@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"ehang.io/nps/bridge"
 	"ehang.io/nps/lib/common"
 	"ehang.io/nps/lib/conn"
 	"ehang.io/nps/lib/file"
@@ -715,6 +716,21 @@ func TestHTTPUpstreamErrorBodyIncludesTarget(t *testing.T) {
 	}
 	if got, want := server.httpUpstreamErrorResponseBytes(http.StatusBadGateway, "10.0.0.8:8080", "203.0.113.7, 172.16.68.13"), int64(len("HTTP/1.1 502 Bad Gateway\r\n\r\n")+len(server.httpUpstreamErrorBody(http.StatusBadGateway, "10.0.0.8:8080", "203.0.113.7, 172.16.68.13"))); got != want {
 		t.Fatalf("unexpected upstream response bytes %d, want %d", got, want)
+	}
+}
+
+func TestHTTPUpstreamErrorDetailsShowDisconnectedClientOnly(t *testing.T) {
+	disconnectedErr := &bridge.ClientDisconnectedError{ClientID: 2, Cause: errors.New("mux unavailable")}
+	details := httpUpstreamErrorDetailLines(disconnectedErr, "")
+	if len(details) != 1 || details[0] != "Client is disconnected" {
+		t.Fatalf("unexpected disconnected client details: %#v", details)
+	}
+	body := string((&httpServer{}).httpUpstreamErrorBody(http.StatusBadGateway, "192.168.1.133:8080", "203.0.113.7", details...))
+	if !strings.Contains(body, "<p>Client is disconnected</p>") {
+		t.Fatalf("upstream error body missing disconnected client detail: %s", body)
+	}
+	if got := httpUpstreamErrorDetailLines(errors.New("target connection refused"), ""); len(got) != 0 {
+		t.Fatalf("target error must not show disconnected client detail: %#v", got)
 	}
 }
 
