@@ -443,8 +443,7 @@ func (s *httpServer) finishHTTPUpstreamError(c *conn.Conn, accessLog *httpAccess
 	fastFailText := upstreamFastFailText(err)
 	detailLines := httpUpstreamErrorDetailLines(err, fastFailText)
 	accessLog.SetErrorDetails(err)
-	remoteAddr := accessLog.entry.RemoteAddr
-	accessLog.SetResponseBytes(s.httpUpstreamErrorResponseBytes(statusCode, targetAddr, remoteAddr, detailLines...))
+	accessLog.SetResponseBytes(s.httpUpstreamErrorResponseBytes(statusCode, targetAddr, detailLines...))
 	if phase == httpAccessLogPhaseTargetConnect {
 		accessLog.Finish(upstreamUnavailableAccessLogErrorText(err, attempts))
 	} else if isRetryableUpstreamDisconnect(err) {
@@ -455,7 +454,7 @@ func (s *httpServer) finishHTTPUpstreamError(c *conn.Conn, accessLog *httpAccess
 		accessLog.Finish(upstreamUnavailableErrorText(err, attempts))
 	}
 	logs.Notice("%s", formatHTTPUpstreamErrorLog(accessLog, statusCode, phase, targetAddr, err))
-	s.writeHTTPUpstreamError(c.Conn, statusCode, targetAddr, remoteAddr, detailLines...)
+	s.writeHTTPUpstreamError(c.Conn, statusCode, targetAddr, detailLines...)
 }
 
 func httpUpstreamErrorDetailLines(err error, fastFailText string) []string {
