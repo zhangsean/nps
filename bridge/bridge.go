@@ -623,6 +623,13 @@ func (s *Bridge) dialLocalProxyTargetsWithRetry(connType string, targetHosts []s
 	return nil, err
 }
 
+func (s *Bridge) TargetCircuitMetrics() []conn.TargetCircuitMetric {
+	if s == nil {
+		return nil
+	}
+	return s.localProxyCircuitBreaker().Metrics()
+}
+
 func linkTargetHosts(link *conn.Link) []string {
 	if link == nil {
 		return nil

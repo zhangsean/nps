@@ -402,6 +402,10 @@ func dialTargetsWithRetry(connType string, targetHosts []string, timeout time.Du
 	return nil, err
 }
 
+func TargetCircuitMetrics() []conn.TargetCircuitMetric {
+	return targetConnectCircuit.Metrics()
+}
+
 func formatTargetHosts(primary string, targetHosts []string) []string {
 	formatted := make([]string, 0, len(targetHosts)+1)
 	seen := make(map[string]struct{}, len(targetHosts)+1)

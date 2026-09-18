@@ -201,6 +201,10 @@ func TestLocalProxyTargetCircuitIsolatesFailingTarget(t *testing.T) {
 	} else if _, ok := err.(*conn.TargetCircuitOpenError); !ok {
 		t.Fatalf("expected circuit open error, got %T: %v", err, err)
 	}
+	metrics := tunnel.TargetCircuitMetrics()
+	if len(metrics) != 1 || metrics[0].Target != badTarget || metrics[0].State != "open" || metrics[0].DialFailureTotal != 2 || metrics[0].FastFailTotal != 1 {
+		t.Fatalf("unexpected local proxy target metrics: %+v", metrics)
+	}
 
 	goodListener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

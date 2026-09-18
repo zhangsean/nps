@@ -13,6 +13,7 @@ import (
 
 	"ehang.io/nps/bridge"
 	"ehang.io/nps/lib/common"
+	"ehang.io/nps/lib/conn"
 	"ehang.io/nps/lib/file"
 	"ehang.io/nps/server/proxy"
 	"ehang.io/nps/server/tool"
@@ -31,6 +32,19 @@ var (
 
 func init() {
 	RunList = sync.Map{}
+}
+
+// GetTargetCircuitMetrics returns the nps LocalProxy target circuit snapshot.
+// Remote npc processes maintain their own snapshots and are not included here.
+func GetTargetCircuitMetrics() []conn.TargetCircuitMetric {
+	if Bridge == nil {
+		return []conn.TargetCircuitMetric{}
+	}
+	metrics := Bridge.TargetCircuitMetrics()
+	if metrics == nil {
+		return []conn.TargetCircuitMetric{}
+	}
+	return metrics
 }
 
 // init task from db

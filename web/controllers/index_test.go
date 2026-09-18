@@ -6,8 +6,25 @@ import (
 	"strings"
 	"testing"
 
+	"ehang.io/nps/lib/conn"
 	"ehang.io/nps/lib/file"
+	"ehang.io/nps/server"
 )
+
+func TestTargetMetricsResponseUsesLocalProxyScope(t *testing.T) {
+	previousBridge := server.Bridge
+	server.Bridge = nil
+	t.Cleanup(func() { server.Bridge = previousBridge })
+
+	response := targetMetricsResponse()
+	if response["status"] != 1 || response["scope"] != "local_proxy" || response["total"] != 0 {
+		t.Fatalf("unexpected target metrics response: %#v", response)
+	}
+	rows, ok := response["rows"].([]conn.TargetCircuitMetric)
+	if !ok || len(rows) != 0 {
+		t.Fatalf("target metrics rows should be an empty typed slice: %#v", response["rows"])
+	}
+}
 
 func TestTunnelFormsPreserveRenderedClientIDOnInitialLoad(t *testing.T) {
 	for _, name := range []string{"add.html", "edit.html"} {

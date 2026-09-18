@@ -153,6 +153,33 @@ func (s *IndexController) PortList() {
 	s.ServeJSON()
 }
 
+func targetMetricsResponse() map[string]interface{} {
+	rows := server.GetTargetCircuitMetrics()
+	return map[string]interface{}{
+		"status": 1,
+		"scope":  "local_proxy",
+		"rows":   rows,
+		"total":  len(rows),
+	}
+}
+
+// TargetMetrics exposes the nps LocalProxy target circuit snapshot to admins.
+func (s *IndexController) TargetMetrics() {
+	isAdmin, _ := s.GetSession("isAdmin").(bool)
+	if !isAdmin {
+		s.Ctx.Output.SetStatus(403)
+		s.Data["json"] = map[string]interface{}{
+			"status": 0,
+			"msg":    "admin access required",
+		}
+		s.ServeJSON()
+		return
+	}
+	s.Ctx.Output.Header("Cache-Control", "no-store")
+	s.Data["json"] = targetMetricsResponse()
+	s.ServeJSON()
+}
+
 func (s *IndexController) Add() {
 	if s.Ctx.Request.Method == "GET" {
 		s.Data["type"] = s.getEscapeString("type")
