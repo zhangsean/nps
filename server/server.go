@@ -275,7 +275,7 @@ func GetTunnel(start, length int, typeVal string, clientId int, search string) (
 			if (typeVal != "" && v.Mode != typeVal || (clientId != 0 && v.Client.Id != clientId)) || (typeVal == "" && clientId != v.Client.Id) {
 				continue
 			}
-			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || v.Port == common.GetIntNoErrByStr(search) || strings.Contains(v.Password, search) || strings.Contains(v.Remark, search) || strings.Contains(v.Client.VerifyKey, search) || strings.Contains(v.Target.TargetStr, search) || strings.Contains(v.LocalPath, search) || strings.Contains(v.StripPre, search)) {
+			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || v.Port == common.GetIntNoErrByStr(search) || strings.Contains(v.Password, search) || strings.Contains(v.Remark, search) || strings.Contains(v.Client.VerifyKey, search) || strings.Contains(v.Target.TargetStr, search) || strings.Contains(v.LocalPath, search) || strings.Contains(v.StripPre, search) || common.PinyinMatch(search, v.Remark) || common.PinyinMatch(search, v.Target.TargetStr) || common.PinyinMatch(search, v.LocalPath)) {
 				continue
 			}
 			cnt++

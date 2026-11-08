@@ -414,6 +414,10 @@
 		<zh-CN>选项</zh-CN>
 		<en-US>option</en-US>
 	</lang>
+	<lang id="word-search-pinyin">
+		<zh-CN>搜索（支持拼音，如 zs / zhangsan）</zh-CN>
+		<en-US>Search (pinyin supported, e.g. zs)</en-US>
+	</lang>
 	<lang id="word-outbandwidth">
 		<zh-CN>流出带宽</zh-CN>
 		<en-US>Out</en-US>

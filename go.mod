@@ -3,7 +3,6 @@ module ehang.io/nps
 go 1.22
 
 require (
-	ehang.io/nps-mux v0.0.0-00010101000000-000000000000
 	fyne.io/fyne/v2 v2.0.2
 	github.com/astaxie/beego v1.12.0
 	github.com/c4milo/unpackit v0.0.0-20170704181138-4ed373e9ef1c
@@ -11,6 +10,7 @@ require (
 	github.com/golang/snappy v0.0.3
 	github.com/kardianos/service v1.2.0
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
+	github.com/mozillazg/go-pinyin v0.20.0
 	github.com/panjf2000/ants/v2 v2.4.2
 	github.com/pkg/errors v0.9.1
 	github.com/shirou/gopsutil/v3 v3.23.10

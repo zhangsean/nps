@@ -60,7 +60,7 @@ func (s *DbUtils) GetClientList(start, length int, search, sort, order string, c
 			if clientId != 0 && clientId != v.Id {
 				continue
 			}
-			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || strings.Contains(v.VerifyKey, search) || strings.Contains(v.Remark, search) || strings.Contains(v.Addr, search) || strings.Contains(v.ClientRegion, search)) {
+			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || strings.Contains(v.VerifyKey, search) || strings.Contains(v.Remark, search) || strings.Contains(v.Addr, search) || strings.Contains(v.ClientRegion, search) || common.PinyinMatch(search, v.Remark) || common.PinyinMatch(search, v.ClientRegion)) {
 				continue
 			}
 			cnt++
@@ -193,7 +193,7 @@ func (s *DbUtils) GetHost(start, length int, id int, search string) ([]*Host, in
 	for _, key := range keys {
 		if value, ok := s.JsonDb.Hosts.Load(key); ok {
 			v := value.(*Host)
-			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || strings.Contains(v.Host, search) || strings.Contains(v.Remark, search) || strings.Contains(v.Client.VerifyKey, search) || strings.Contains(v.Target.TargetStr, search)) {
+			if search != "" && !(v.Id == common.GetIntNoErrByStr(search) || strings.Contains(v.Host, search) || strings.Contains(v.Remark, search) || strings.Contains(v.Client.VerifyKey, search) || strings.Contains(v.Target.TargetStr, search) || common.PinyinMatch(search, v.Remark)) {
 				continue
 			}
 			if id == 0 || v.Client.Id == id {

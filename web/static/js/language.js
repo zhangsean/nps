@@ -89,6 +89,13 @@
 					'pageSize': tableOptions.pageSize
 				});
 			}
+			var searchTip = languages['content']['word-search-pinyin'];
+			if ( $.type(searchTip) == 'object' ) {
+				searchTip = (searchTip[languages['current']] || searchTip[languages['default']] || null);
+			}
+			if ( $.type(searchTip) == 'string' && searchTip ) {
+				$('.bootstrap-table .search input').attr('placeholder', searchTip);
+			}
 		}
 		$.each($(dom + ' [langtag]'), function (i, item) {
 			var index = $(item).attr('langtag');
