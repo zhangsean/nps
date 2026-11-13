@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -255,21 +256,80 @@ func (httpsListener *HttpsListener) Addr() net.Addr {
 	return httpsListener.parentListener.Addr()
 }
 
+const (
+	tlsRecordTypeHandshake      = 22
+	tlsHandshakeTypeClientHello = 1
+	// maxTLSRecordPayload is the largest payload a single TLS record may carry.
+	maxTLSRecordPayload = 16384
+	// maxClientHelloBytes caps how much data is read while waiting for a
+	// ClientHello, so a malicious or broken client cannot make the server
+	// buffer an unbounded amount of data.
+	maxClientHelloBytes = 64 * 1024
+	// clientHelloReadTimeout bounds the wait for the ClientHello so a client
+	// that connects and stalls cannot hold a server goroutine forever.
+	clientHelloReadTimeout = 10 * time.Second
+)
+
 // get server name from connection by read client hello bytes
 func GetServerNameFromClientHello(c net.Conn) (string, []byte) {
-	buf := make([]byte, 4096)
-	data := make([]byte, 4096)
-	n, err := c.Read(buf)
-	if err != nil {
+	if c == nil {
 		return "", nil
 	}
-	if n < 42 {
-		return "", nil
+	// The ClientHello must be read completely before it can be parsed. A
+	// ClientHello regularly spans several TCP segments (modern browsers send
+	// TLS 1.3 hellos with large post-quantum key shares), so a single Read is
+	// not enough: a short read used to leave the SNI unparsed and the server
+	// closed the connection without any response.
+	_ = c.SetReadDeadline(time.Now().Add(clientHelloReadTimeout))
+	raw, handshake, ok := readClientHelloFromConn(c)
+	_ = c.SetReadDeadline(time.Time{})
+	if !ok {
+		return "", raw
 	}
-	copy(data, buf[:n])
 	clientHello := new(crypt.ClientHelloMsg)
-	clientHello.Unmarshal(data[5:n])
-	return clientHello.GetServerName(), buf[:n]
+	clientHello.Unmarshal(handshake)
+	return clientHello.GetServerName(), raw
+}
+
+// readClientHelloFromConn reads TLS records until the full ClientHello
+// handshake message is available. It returns the raw bytes consumed from the
+// connection (replayed to the upstream) and the reassembled handshake message
+// (without the TLS record headers).
+func readClientHelloFromConn(c net.Conn) (raw []byte, handshake []byte, ok bool) {
+	header := make([]byte, 5)
+	for {
+		if _, err := io.ReadFull(c, header); err != nil {
+			return raw, handshake, false
+		}
+		raw = append(raw, header...)
+		if header[0] != tlsRecordTypeHandshake {
+			return raw, handshake, false
+		}
+		recordLen := int(header[3])<<8 | int(header[4])
+		if recordLen <= 0 || recordLen > maxTLSRecordPayload || len(raw)+recordLen > maxClientHelloBytes {
+			return raw, handshake, false
+		}
+		payload := make([]byte, recordLen)
+		if _, err := io.ReadFull(c, payload); err != nil {
+			return raw, handshake, false
+		}
+		raw = append(raw, payload...)
+		handshake = append(handshake, payload...)
+
+		if len(handshake) < 4 {
+			continue
+		}
+		if handshake[0] != tlsHandshakeTypeClientHello {
+			return raw, handshake, false
+		}
+		handshakeLen := int(handshake[1])<<16 | int(handshake[2])<<8 | int(handshake[3])
+		if handshakeLen <= 0 || handshakeLen > maxClientHelloBytes {
+			return raw, handshake, false
+		}
+		if len(handshake) >= 4+handshakeLen {
+			return raw, handshake[:4+handshakeLen], true
+		}
+	}
 }
 
 // build https request
