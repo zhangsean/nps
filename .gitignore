@@ -5,3 +5,16 @@ docker-build/
 .vscode/
 .playwright-cli/
 output/
+# build artifacts / binaries
+*.exe
+*.dll
+*.tar.gz
+*.tgz
+
+# runtime logs and profiles
+*.log
+.codex-pprof/
+
+# local runtime state / backups
+conf/global.json
+*.bak
