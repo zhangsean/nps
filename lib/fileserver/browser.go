@@ -836,9 +836,7 @@ func (b *Browser) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !strings.HasSuffix(requestPath, "/") {
-		redirectURL := *r.URL
-		redirectURL.Path = r.URL.Path + "/"
-		http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
+		http.Redirect(w, r, sameOriginRedirect(r, r.URL.Path+"/", r.URL.RawQuery), http.StatusMovedPermanently)
 		return
 	}
 
@@ -1087,9 +1085,7 @@ func (b *Browser) stripRequestPath(w http.ResponseWriter, r *http.Request) (stri
 
 	prefix := strings.TrimRight(b.stripPrefix, "/")
 	if r.URL.Path == prefix {
-		redirectURL := *r.URL
-		redirectURL.Path = prefix + "/"
-		http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
+		http.Redirect(w, r, sameOriginRedirect(r, prefix+"/", r.URL.RawQuery), http.StatusMovedPermanently)
 		return "", false
 	}
 	if !strings.HasPrefix(r.URL.Path, prefix+"/") {
@@ -1204,34 +1200,42 @@ func safeEntryName(name string) (string, bool) {
 	return name, true
 }
 
+// sameOriginRedirect 构造站内重定向目标。
+// 请求路径来自客户端，"//evil.example/.." 这类以双斜杠开头的路径一旦原样写进
+// Location 头，就会被浏览器当成协议相对 URL 跳到外部站点（开放重定向）。
+// 这里把路径规整为单斜杠开头的站内绝对路径，其余部分（query）原样保留。
+func sameOriginRedirect(r *http.Request, requestPath, rawQuery string) string {
+	redirectURL := *r.URL
+	redirectURL.Path = "/" + strings.TrimLeft(requestPath, "/")
+	redirectURL.RawPath = ""
+	redirectURL.Fragment = ""
+	redirectURL.RawFragment = ""
+	redirectURL.RawQuery = rawQuery
+	return redirectURL.String()
+}
+
 func redirectToDirectory(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
+	http.Redirect(w, r, sameOriginRedirect(r, r.URL.Path, r.URL.RawQuery), http.StatusSeeOther)
 }
 
 func redirectToDirectoryNotice(w http.ResponseWriter, r *http.Request, notice string) {
-	redirectURL := *r.URL
 	query := url.Values{}
 	query.Set("notice", notice)
-	redirectURL.RawQuery = query.Encode()
-	http.Redirect(w, r, redirectURL.String(), http.StatusSeeOther)
+	http.Redirect(w, r, sameOriginRedirect(r, r.URL.Path, query.Encode()), http.StatusSeeOther)
 }
 
 func redirectToLoginError(w http.ResponseWriter, r *http.Request) {
-	redirectURL := *r.URL
-	query := redirectURL.Query()
+	query := r.URL.Query()
 	query.Del("action")
 	query.Set("login_error", "1")
-	redirectURL.RawQuery = query.Encode()
-	http.Redirect(w, r, redirectURL.String(), http.StatusSeeOther)
+	http.Redirect(w, r, sameOriginRedirect(r, r.URL.Path, query.Encode()), http.StatusSeeOther)
 }
 
 func redirectToBrowseLoginError(w http.ResponseWriter, r *http.Request) {
-	redirectURL := *r.URL
-	query := redirectURL.Query()
+	query := r.URL.Query()
 	query.Del("action")
 	query.Set("browse_login_error", "1")
-	redirectURL.RawQuery = query.Encode()
-	http.Redirect(w, r, redirectURL.String(), http.StatusSeeOther)
+	http.Redirect(w, r, sameOriginRedirect(r, r.URL.Path, query.Encode()), http.StatusSeeOther)
 }
 
 func (b *Browser) renderDirectory(w http.ResponseWriter, r *http.Request, dirPath string, cleanPath string) {

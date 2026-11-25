@@ -1,9 +1,12 @@
 package fileserver
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
+	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -63,6 +66,51 @@ func TestBrowserRedirectKeepsStripPrefix(t *testing.T) {
 	}
 	if location := rec.Header().Get("Location"); location != "http://example.com/web/sub/?x=1" {
 		t.Fatalf("Location = %q", location)
+	}
+}
+
+func TestBrowserRedirectStaysSameOrigin(t *testing.T) {
+	// 扫描器给出的两条 POC：请求行以双斜杠开头（origin-form），服务端 r.URL 不带 scheme/host。
+	// 若原样写进 Location，客户端会当成协议相对 URL 跳到外部站点（开放重定向）。
+	attacks := []string{
+		"//evil1737891b.com%2f..",
+		"//example.com/%2F..",
+	}
+	server := httptest.NewServer(NewBrowser(t.TempDir(), ""))
+	defer server.Close()
+
+	for _, requestURI := range attacks {
+		conn, err := net.Dial("tcp", server.Listener.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		request := "GET " + requestURI + " HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n"
+		if _, err := io.WriteString(conn, request); err != nil {
+			conn.Close()
+			t.Fatal(err)
+		}
+		response, err := http.ReadResponse(bufio.NewReader(conn), nil)
+		if err != nil {
+			conn.Close()
+			t.Fatal(err)
+		}
+		location := response.Header.Get("Location")
+		response.Body.Close()
+		conn.Close()
+
+		if location == "" {
+			t.Fatalf("%s: status = %d, want a redirect", requestURI, response.StatusCode)
+		}
+		if strings.HasPrefix(location, "//") {
+			t.Fatalf("%s: protocol-relative redirect, Location = %q", requestURI, location)
+		}
+		parsed, err := url.Parse(location)
+		if err != nil {
+			t.Fatalf("%s: parse Location %q: %v", requestURI, location, err)
+		}
+		if parsed.Host != "" && parsed.Host != "example.com" {
+			t.Fatalf("%s: cross-host redirect, Location = %q", requestURI, location)
+		}
 	}
 }
 

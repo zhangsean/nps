@@ -25,6 +25,11 @@ https://natnps.com/
 
 
 ## 更新日志
+- 2026-11-25  v0.27.34
+  - **修复**：文件访问服务（`Mode=file`）存在开放重定向——请求路径以双斜杠开头时（如 `GET //evil.com%2f..`），该路径被原样拼进 `Location` 响应头，客户端按协议相对 URL 直接跳到外部站点，可被用于钓鱼/SSRF。现所有跳转统一经 `sameOriginRedirect()` 规整为单斜杠开头的站内路径，覆盖目录补尾斜杠、`strip_pre` 前缀补尾斜杠，以及 `notice`/`login_error`/`browse_login_error` 三类回跳，query 原样保留。
+  - **测试**：新增按真实 HTTP 请求行（裸 TCP，`httptest.Server`）构造两条 POC 的回归用例，修复前返回 `Location: //evil1737891b.com/../`，修复后为 `/`。
+  - **升级**：控制台内置 jQuery 3.4.1 → 3.7.1。3.4.1 命中 CVE-2020-11022 / CVE-2020-11023（DOM 操作可将不可信 HTML 当代码执行），医院上线安全扫描会按「存在漏洞的JavaScript库」报中危。已用浏览器实测登录页、仪表盘、各列表页（bootstrap-table）正常。
+
 - 2026-11-14  v0.27.33
   - **修复**：HTTPS 反向代理在 ClientHello 跨多个 TCP 段到达时（现代浏览器 TLS 1.3 后量子密钥交换、OpenSSL 3.x 等大体积 ClientHello）只读取第一段数据，导致 SNI 解析失败、域名匹配不到并直接断开连接，浏览器表现为 `ERR_CONNECTION_CLOSED`；改为按 TLS record 长度完整读取并支持跨 record 重组握手消息，同时增加 10 秒读超时和 64KB 大小上限。
 
