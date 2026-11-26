@@ -25,6 +25,10 @@ https://natnps.com/
 
 
 ## 更新日志
+- 2026-11-26  v0.27.35
+  - **新增**：HTTP 代理（`mode=httpProxy`）和 SOCKS5 代理（`mode=socks5`）隧道支持单独配置代理认证用户名和密码——Web 管理端新增/编辑隧道时可直接填写「代理认证用户名/密码」，客户端配置也可用 `auth_user`/`auth_password`。配置后仅接受该账号；未配置时继续沿用客户端级别的 `basic_username`/`basic_password`，SOCKS5 的 `multi_account` 多账号配置仍可用，优先级为隧道认证 > 多账号 > 客户端认证。
+  - **修复**：HTTP 代理认证失败改为返回标准 `407 Proxy Authentication Required`（带 `Proxy-Authenticate`），且先校验认证再回 `200 Connection established`，修复浏览器通过 HTTPS（CONNECT）使用代理时认证不生效的问题；转发请求时不再把 `Proxy-Authorization` 请求头带给目标服务器。
+
 - 2026-11-25  v0.27.34
   - **修复**：文件访问服务（`Mode=file`）存在开放重定向——请求路径以双斜杠开头时（如 `GET //evil.com%2f..`），该路径被原样拼进 `Location` 响应头，客户端按协议相对 URL 直接跳到外部站点，可被用于钓鱼/SSRF。现所有跳转统一经 `sameOriginRedirect()` 规整为单斜杠开头的站内路径，覆盖目录补尾斜杠、`strip_pre` 前缀补尾斜杠，以及 `notice`/`login_error`/`browse_login_error` 三类回跳，query 原样保留。
   - **测试**：新增按真实 HTTP 请求行（裸 TCP，`httptest.Server`）构造两条 POC 的回归用例，修复前返回 `Location: //evil1737891b.com/../`，修复后为 `/`。
