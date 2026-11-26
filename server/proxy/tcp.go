@@ -1,11 +1,13 @@
 package proxy
 
 import (
+	"bytes"
 	"errors"
 	"net"
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"ehang.io/nps/bridge"
 	"ehang.io/nps/lib/common"
@@ -114,12 +116,34 @@ func ProcessHttp(c *conn.Conn, s *TunnelModeServer) error {
 		logs.Info(err)
 		return err
 	}
+	// verify credentials before replying to CONNECT so clients receive 407
+	if err := s.proxyAuth(r, c); err != nil {
+		return err
+	}
 	if r.Method == "CONNECT" {
 		c.Write([]byte("HTTP/1.1 200 Connection established\r\n\r\n"))
 		rb = nil
-	}
-	if err := s.auth(r, c, s.task.Client.Cnf.U, s.task.Client.Cnf.P); err != nil {
-		return err
+	} else {
+		rb = stripProxyAuthorizationHeader(rb)
 	}
 	return s.DealClient(c, s.task.Client, addr, rb, common.CONN_TCP, nil, s.task.Client.Flow, s.task.Target.LocalProxy, nil, nil)
+}
+
+// stripProxyAuthorizationHeader removes Proxy-Authorization from a raw HTTP
+// request header block so proxy credentials are not forwarded to targets.
+func stripProxyAuthorizationHeader(raw []byte) []byte {
+	if len(raw) == 0 {
+		return raw
+	}
+	lines := bytes.Split(raw, []byte("\r\n"))
+	filtered := make([][]byte, 0, len(lines))
+	for i, line := range lines {
+		if i > 0 {
+			if colon := bytes.IndexByte(line, ':'); colon > 0 && strings.EqualFold(string(line[:colon]), "Proxy-Authorization") {
+				continue
+			}
+		}
+		filtered = append(filtered, line)
+	}
+	return bytes.Join(filtered, []byte("\r\n"))
 }

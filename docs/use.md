@@ -139,11 +139,15 @@ vkey=123
 [http]
 mode=httpProxy
 server_port=9003
+auth_user=proxy
+auth_password=123456
 ```
 项 | 含义
 ---|---
 mode | httpProxy
 server_port | 在服务端的代理端口
+auth_user | 代理认证用户名（可选），与`auth_password`同时配置后生效，也可在 Web 管理端编辑隧道时填写
+auth_password | 代理认证密码（可选）
 #### socks5代理模式
 
 ```ini
@@ -153,12 +157,16 @@ vkey=123
 [socks5]
 mode=socks5
 server_port=9004
+auth_user=proxy
+auth_password=123456
 multi_account=multi_account.conf
 ```
 项 | 含义
 ---|---
 mode | socks5
 server_port | 在服务端的代理端口
+auth_user | 代理认证用户名（可选），与`auth_password`同时配置，也可在 Web 管理端编辑隧道时填写
+auth_password | 代理认证密码（可选）
 multi_account | socks5多账号配置文件（可选),配置后使用basic_username和basic_password无法通过认证
 #### 私密代理模式
 

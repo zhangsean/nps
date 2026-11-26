@@ -438,6 +438,14 @@
 		<zh-CN>端口</zh-CN>
 		<en-US>Port</en-US>
 	</lang>
+	<lang id="word-proxyauthpassword">
+		<zh-CN>代理认证密码</zh-CN>
+		<en-US>Proxy auth password</en-US>
+	</lang>
+	<lang id="word-proxyauthusername">
+		<zh-CN>代理认证用户名</zh-CN>
+		<en-US>Proxy auth username</en-US>
+	</lang>
 	<lang id="word-proxytolocal">
 		<zh-CN>代理到服务器本地</zh-CN>
 		<en-US>Proxy to server local</en-US>
@@ -740,6 +748,10 @@
 	<lang id="info-identificationkey">
 		<zh-CN>P2P连接和私密代理模式需要</zh-CN>
 		<en-US>When P2P or Secret</en-US>
+	</lang>
+	<lang id="info-proxyauth">
+		<zh-CN>仅对 HTTP 代理和 SOCKS5 代理生效，用户名和密码需同时填写；留空则沿用客户端认证</zh-CN>
+		<en-US>Only for HTTP proxy and SOCKS5 proxy; fill in both username and password, or leave both empty to use client auth</en-US>
 	</lang>
 	<lang id="info-feature1">
 		<zh-CN>协议支持全面，兼容几乎所有常用协议，例如tcp、udp、http(s)、socks5、p2p、http代理...</zh-CN>

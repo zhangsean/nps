@@ -821,6 +821,8 @@ loop:
 					tl.NoStore = true
 					tl.Client = client
 					tl.Password = t.Password
+					tl.AuthUser = t.AuthUser
+					tl.AuthPass = t.AuthPass
 					tl.LocalPath = t.LocalPath
 					tl.StripPre = t.StripPre
 					tl.MultiAccount = t.MultiAccount

@@ -302,7 +302,7 @@ func (s *Sock5ModeServer) handleConn(c net.Conn) {
 		c.Close()
 		return
 	}
-	if (s.task.Client.Cnf.U != "" && s.task.Client.Cnf.P != "") || (s.task.MultiAccount != nil && len(s.task.MultiAccount.AccountMap) > 0) {
+	if s.authRequired() {
 		buf[1] = UserPassAuth
 		c.Write(buf)
 		if err := s.Auth(c); err != nil {
@@ -315,6 +315,32 @@ func (s *Sock5ModeServer) handleConn(c net.Conn) {
 		c.Write(buf)
 	}
 	s.handleRequest(c)
+}
+
+// authRequired reports whether socks5 clients must authenticate.
+func (s *Sock5ModeServer) authRequired() bool {
+	if u, p := s.tunnelProxyAuth(); u != "" && p != "" {
+		return true
+	}
+	if s.task.MultiAccount != nil && len(s.task.MultiAccount.AccountMap) > 0 {
+		return true
+	}
+	u, p := s.clientProxyAuth()
+	return u != "" && p != ""
+}
+
+// checkAuth verifies socks5 credentials. Tunnel-level credentials take
+// precedence, then multi-account settings, then client-level credentials.
+func (s *Sock5ModeServer) checkAuth(user, pass string) bool {
+	if u, p := s.tunnelProxyAuth(); u != "" && p != "" {
+		return user == u && pass == p
+	}
+	if s.task.MultiAccount != nil && len(s.task.MultiAccount.AccountMap) > 0 {
+		p, ok := s.task.MultiAccount.AccountMap[user]
+		return ok && pass == p
+	}
+	u, p := s.clientProxyAuth()
+	return u != "" && p != "" && user == u && pass == p
 }
 
 //socks5 auth
@@ -340,24 +366,7 @@ func (s *Sock5ModeServer) Auth(c net.Conn) error {
 		return err
 	}
 
-	var U, P string
-	if s.task.MultiAccount != nil {
-		// enable multi user auth
-		U = string(user)
-		if len(U) == 0 {
-		        return errors.New("验证不通过")
-		}
-		var ok bool
-		P, ok = s.task.MultiAccount.AccountMap[U]
-		if !ok {
-			return errors.New("验证不通过")
-		}
-	} else {
-		U = s.task.Client.Cnf.U
-		P = s.task.Client.Cnf.P
-	}
-
-	if string(user) == U && string(pass) == P {
+	if s.checkAuth(string(user), string(pass)) {
 		if _, err := c.Write([]byte{userAuthVersion, authSuccess}); err != nil {
 			return err
 		}

@@ -49,6 +49,16 @@ func validateTunnelUpload(t *file.Tunnel) string {
 	return ""
 }
 
+func validateTunnelProxyAuth(t *file.Tunnel) string {
+	if t.Mode != "socks5" && t.Mode != "httpProxy" {
+		return ""
+	}
+	if (t.AuthUser == "") != (t.AuthPass == "") {
+		return "proxy auth username and password must be set together"
+	}
+	return ""
+}
+
 func newTunnelForm(clientId int, mode string) *file.Tunnel {
 	if mode == "" {
 		mode = "tcp"
@@ -209,6 +219,8 @@ func (s *IndexController) Add() {
 			Status:      true,
 			Remark:      s.getEscapeString("remark"),
 			Password:    s.getEscapeString("password"),
+			AuthUser:    s.getEscapeString("auth_user"),
+			AuthPass:    s.getEscapeString("auth_password"),
 			LocalPath:   s.getEscapeString("local_path"),
 			StripPre:    s.getEscapeString("strip_pre"),
 			BrowseURL:   s.getEscapeString("browse_url"),
@@ -220,6 +232,9 @@ func (s *IndexController) Add() {
 		}
 		normalizeTunnelFormDefaults(t)
 		if msg := validateTunnelUpload(t); msg != "" {
+			s.AjaxErr(msg)
+		}
+		if msg := validateTunnelProxyAuth(t); msg != "" {
 			s.AjaxErr(msg)
 		}
 
@@ -299,6 +314,8 @@ func (s *IndexController) Edit() {
 			t.Mode = s.getEscapeString("type")
 			t.Target = &file.Target{TargetStr: strings.ReplaceAll(s.getEscapeString("target"), "\r\n", "\n")}
 			t.Password = s.getEscapeString("password")
+			t.AuthUser = s.getEscapeString("auth_user")
+			t.AuthPass = s.getEscapeString("auth_password")
 			t.Id = id
 			t.LocalPath = s.getEscapeString("local_path")
 			t.StripPre = s.getEscapeString("strip_pre")
@@ -311,6 +328,10 @@ func (s *IndexController) Edit() {
 			t.Target.LocalProxy = s.GetBoolNoErr("local_proxy")
 			normalizeTunnelFormDefaults(t)
 			if msg := validateTunnelUpload(t); msg != "" {
+				s.AjaxErr(msg)
+				return
+			}
+			if msg := validateTunnelProxyAuth(t); msg != "" {
 				s.AjaxErr(msg)
 				return
 			}

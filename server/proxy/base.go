@@ -163,6 +163,42 @@ func (s *BaseServer) auth(r *http.Request, c *conn.Conn, u, p string) error {
 	return nil
 }
 
+// tunnelProxyAuth returns the per-tunnel credentials of httpProxy and socks5
+// tunnels. Both values must be configured for the tunnel auth to take effect.
+func (s *BaseServer) tunnelProxyAuth() (string, string) {
+	if s.task != nil && s.task.AuthUser != "" && s.task.AuthPass != "" {
+		return s.task.AuthUser, s.task.AuthPass
+	}
+	return "", ""
+}
+
+// clientProxyAuth returns the legacy client-level credentials, which keep
+// working for tunnels that do not configure their own auth.
+func (s *BaseServer) clientProxyAuth() (string, string) {
+	if s.task != nil && s.task.Client != nil && s.task.Client.Cnf != nil {
+		return s.task.Client.Cnf.U, s.task.Client.Cnf.P
+	}
+	return "", ""
+}
+
+// proxyAuth verifies Proxy-Authorization of httpProxy mode requests and
+// replies with 407 Proxy Authentication Required when it does not match.
+func (s *BaseServer) proxyAuth(r *http.Request, c *conn.Conn) error {
+	u, p := s.tunnelProxyAuth()
+	if u == "" || p == "" {
+		u, p = s.clientProxyAuth()
+	}
+	if u == "" || p == "" {
+		return nil
+	}
+	if common.CheckAuth(r, u, p) {
+		return nil
+	}
+	c.Write([]byte(common.ProxyUnauthorizedBytes))
+	c.Close()
+	return errors.New("407 Proxy Authentication Required")
+}
+
 // check flow limit of the client ,and decrease the allow num of client
 func (s *BaseServer) CheckFlowAndConnNum(client *file.Client) error {
 	if client.Flow.FlowLimit > 0 && (client.Flow.FlowLimit<<20) < (client.Flow.ExportFlow+client.Flow.InletFlow) {

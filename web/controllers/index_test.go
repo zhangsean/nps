@@ -104,3 +104,21 @@ func TestValidateTunnelUploadRejectsInvalidBrowseURL(t *testing.T) {
 		t.Fatal("relative browse URL should be rejected")
 	}
 }
+
+func TestValidateTunnelProxyAuth(t *testing.T) {
+	if message := validateTunnelProxyAuth(&file.Tunnel{Mode: "socks5", AuthUser: "user"}); message == "" {
+		t.Fatal("socks5 auth without password should be rejected")
+	}
+	if message := validateTunnelProxyAuth(&file.Tunnel{Mode: "httpProxy", AuthPass: "pass"}); message == "" {
+		t.Fatal("http proxy auth without username should be rejected")
+	}
+	if message := validateTunnelProxyAuth(&file.Tunnel{Mode: "socks5", AuthUser: "user", AuthPass: "pass"}); message != "" {
+		t.Fatalf("valid socks5 auth rejected: %s", message)
+	}
+	if message := validateTunnelProxyAuth(&file.Tunnel{Mode: "httpProxy", AuthUser: "user", AuthPass: "pass"}); message != "" {
+		t.Fatalf("valid http proxy auth rejected: %s", message)
+	}
+	if message := validateTunnelProxyAuth(&file.Tunnel{Mode: "tcp", AuthUser: "user"}); message != "" {
+		t.Fatalf("auth fields on other modes should be ignored: %s", message)
+	}
+}

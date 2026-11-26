@@ -140,6 +140,8 @@ type Tunnel struct {
 	Ports        string
 	Flow         *Flow
 	Password     string
+	AuthUser     string // proxy auth username for httpProxy and socks5
+	AuthPass     string // proxy auth password for httpProxy and socks5
 	Remark       string
 	TargetAddr   string
 	NoStore      bool

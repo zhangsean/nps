@@ -33,6 +33,11 @@ Content-Type: text/plain; charset=utf-8
 WWW-Authenticate: Basic realm="easyProxy"
 
 401 Unauthorized`
+	ProxyUnauthorizedBytes = "HTTP/1.1 407 Proxy Authentication Required\r\n" +
+		"Content-Type: text/plain; charset=utf-8\r\n" +
+		"Proxy-Authenticate: Basic realm=\"nps\"\r\n" +
+		"Connection: close\r\n\r\n" +
+		"407 Proxy Authentication Required"
 	ConnectionFailBytes = `HTTP/1.1 404 Not Found
 
 `
